@@ -40,32 +40,36 @@ class _NavigateScreenState extends State<NavigateScreen> {
     super.dispose();
   }
 
-  int _mapMan(String m) {
-    if (m.contains('uturn')) return 8;
-    if (m.contains('sharp-left')) return 7;
-    if (m.contains('sharp-right')) return 6;
-    if (m.contains('slight-left')) return 4;
-    if (m.contains('slight-right')) return 5;
-    if (m.contains('left')) return 2;
-    if (m.contains('right')) return 3;
-    return 1;
+  // Doi ma huong re cua OpenRouteService (so) -> enum firmware
+  int _mapMan(int t) {
+    switch (t) {
+      case 0: return 2;   // turn left
+      case 1: return 3;   // turn right
+      case 2: return 7;   // sharp left
+      case 3: return 6;   // sharp right
+      case 4: return 4;   // slight left
+      case 5: return 5;   // slight right
+      case 9: return 8;   // u-turn
+      case 10: return 9;  // goal/arrive
+      case 12: return 4;  // keep left
+      case 13: return 5;  // keep right
+      default: return 1;  // straight / depart / roundabout
+    }
   }
-
-  String _strip(String h) =>
-      h.replaceAll(RegExp(r'<[^>]+>'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
 
   Future<void> _startRoute() async {
     if (!_ble.connected) {
       setState(() => _navStat = 'Hãy kết nối đồng hồ trước');
       return;
     }
-    if (_apiKey.text.trim().isEmpty || _dest.text.trim().isEmpty) {
+    final key = _apiKey.text.trim();
+    final dest = _dest.text.trim();
+    if (key.isEmpty || dest.isEmpty) {
       setState(() => _navStat = 'Nhập API key và điểm đến');
       return;
     }
     setState(() => _navStat = 'Đang lấy vị trí...');
 
-    // quyen vi tri
     var perm = await Geolocator.checkPermission();
     if (perm == LocationPermission.denied) {
       perm = await Geolocator.requestPermission();
@@ -75,34 +79,59 @@ class _NavigateScreenState extends State<NavigateScreen> {
       setState(() => _navStat = 'Bị từ chối quyền vị trí');
       return;
     }
-
     final pos = await Geolocator.getCurrentPosition();
-    final origin = '${pos.latitude},${pos.longitude}';
-    final url = Uri.parse(
-        'https://maps.googleapis.com/maps/api/directions/json?origin=$origin'
-        '&destination=${Uri.encodeComponent(_dest.text.trim())}'
-        '&mode=driving&language=vi&key=${_apiKey.text.trim()}');
 
     try {
-      final res = await http.get(url);
-      final j = jsonDecode(res.body) as Map<String, dynamic>;
-      if (j['status'] != 'OK') {
-        setState(() => _navStat = 'Directions lỗi: ${j['status']}');
+      // 1) Geocode: doi ten dia diem -> toa do (lon,lat)
+      setState(() => _navStat = 'Đang tìm điểm đến...');
+      final geoUrl = Uri.parse(
+          'https://api.openrouteservice.org/geocode/search'
+          '?api_key=$key&text=${Uri.encodeComponent(dest)}&size=1');
+      final geoRes = await http.get(geoUrl);
+      final geo = jsonDecode(geoRes.body) as Map<String, dynamic>;
+      final feats = geo['features'] as List?;
+      if (feats == null || feats.isEmpty) {
+        setState(() => _navStat = 'Không tìm thấy điểm đến (kiểm tra key/điểm đến)');
         return;
       }
-      final leg = j['routes'][0]['legs'][0];
-      _steps = (leg['steps'] as List).map((s) {
-        final end = s['end_location'];
-        return _NavStep(
-          (end['lat'] as num).toDouble(),
-          (end['lng'] as num).toDouble(),
-          _mapMan((s['maneuver'] ?? '').toString()),
-          _strip((s['html_instructions'] ?? '').toString()),
-        );
-      }).toList();
+      final dc = feats[0]['geometry']['coordinates'] as List; // [lon, lat]
+      final double dLon = (dc[0] as num).toDouble();
+      final double dLat = (dc[1] as num).toDouble();
+
+      // 2) Tinh tuyen duong
+      setState(() => _navStat = 'Đang tính đường...');
+      final dirUrl = Uri.parse(
+          'https://api.openrouteservice.org/v2/directions/driving-car'
+          '?api_key=$key&start=${pos.longitude},${pos.latitude}&end=$dLon,$dLat');
+      final dirRes = await http.get(dirUrl);
+      final dir = jsonDecode(dirRes.body) as Map<String, dynamic>;
+      final dfeats = dir['features'] as List?;
+      if (dfeats == null || dfeats.isEmpty) {
+        setState(() => _navStat = 'Lỗi định tuyến (xem lại key)');
+        return;
+      }
+      final coords = dfeats[0]['geometry']['coordinates'] as List; // [[lon,lat],...]
+      final segments = dfeats[0]['properties']['segments'] as List;
+      _steps = [];
+      for (final seg in segments) {
+        for (final s in (seg['steps'] as List)) {
+          final wp = s['way_points'] as List; // [startIdx, endIdx]
+          int endIdx = (wp[1] as num).toInt();
+          if (endIdx < 0) endIdx = 0;
+          if (endIdx >= coords.length) endIdx = coords.length - 1;
+          final c = coords[endIdx] as List; // [lon, lat]
+          _steps.add(_NavStep(
+            (c[1] as num).toDouble(), // lat
+            (c[0] as num).toDouble(), // lng
+            _mapMan((s['type'] as num).toInt()),
+            (s['instruction'] ?? '').toString(),
+          ));
+        }
+      }
       _idx = 0;
-      setState(() =>
-          _navStat = 'Bắt đầu: ${_steps.length} bước · ${leg['distance']['text']}');
+      final dist = (dfeats[0]['properties']['summary']?['distance'] ?? 0) as num;
+      setState(() => _navStat =
+          'Bắt đầu: ${_steps.length} bước · ${(dist / 1000).toStringAsFixed(1)} km');
 
       _posSub?.cancel();
       _posSub = Geolocator.getPositionStream(
@@ -157,12 +186,12 @@ class _NavigateScreenState extends State<NavigateScreen> {
                 const Text('Dẫn đường tự động',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
-                Text('GPS điện thoại + Google Directions đẩy từng bước rẽ xuống đồng hồ.',
+                Text('GPS điện thoại + OpenRouteService đẩy từng bước rẽ xuống đồng hồ. (Key miễn phí tại openrouteservice.org)',
                     style: TextStyle(color: Colors.grey[400], fontSize: 13)),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _apiKey,
-                  decoration: const InputDecoration(labelText: 'Google Maps API Key'),
+                  decoration: const InputDecoration(labelText: 'OpenRouteService API Key'),
                 ),
                 const SizedBox(height: 10),
                 TextField(
