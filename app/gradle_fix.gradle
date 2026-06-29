@@ -1,0 +1,8 @@
+
+// Cung cap SDK version cho cac plugin Android doc qua rootProject.ext
+// (sua loi flutter_blue_plus: "compileSdkVersion is not specified")
+ext {
+    compileSdkVersion = 35
+    minSdkVersion = 23
+    targetSdkVersion = 34
+}

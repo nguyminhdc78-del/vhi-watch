@@ -43,17 +43,10 @@ jobs:
           echo "----- build.gradle sau khi sua -----"
           grep -E "compileSdk|minSdk|targetSdk" "$APPG" || true
           # Fix loi "compileSdkVersion is not specified" cua flutter_blue_plus:
-          # cung cap gia tri qua rootProject.ext de moi plugin doc duoc khi cau hinh
-          cat >> _gen/android/build.gradle <<'EOF'
-
-ext {
-    compileSdkVersion = 35
-    minSdkVersion = 23
-    targetSdkVersion = 34
-}
-EOF
+          # them file gradle_fix vao cuoi android/build.gradle (cung cap SDK qua rootProject.ext)
+          cat app/gradle_fix.gradle >> _gen/android/build.gradle
           echo "----- da them ext vao android/build.gradle -----"
-          tail -8 _gen/android/build.gradle
+          tail -10 _gen/android/build.gradle
 
       - name: Build APK
         working-directory: _gen
