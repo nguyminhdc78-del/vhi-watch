@@ -24,7 +24,7 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.24.5"   # ghim ban on dinh, tranh lech API
+          flutter-version: "3.29.3"   # mac dinh compileSdk 35, hop voi flutter_blue_plus 2.x
           channel: stable
           cache: true
 
@@ -35,18 +35,6 @@ jobs:
           cp -r app/lib _gen/lib
           cp app/pubspec.yaml _gen/pubspec.yaml
           cp app/android_manifest_template.xml _gen/android/app/src/main/AndroidManifest.xml
-          # Nang compileSdk=35 + minSdk=23 cho khop yeu cau cac plugin (flutter_blue_plus, geolocator...)
-          APPG=_gen/android/app/build.gradle
-          [ -f "$APPG" ] || APPG=_gen/android/app/build.gradle.kts
-          sed -i 's/flutter\.compileSdkVersion/35/' "$APPG"
-          sed -i 's/flutter\.minSdkVersion/23/' "$APPG"
-          echo "----- build.gradle sau khi sua -----"
-          grep -E "compileSdk|minSdk|targetSdk" "$APPG" || true
-          # Fix loi "compileSdkVersion is not specified" cua flutter_blue_plus:
-          # them file gradle_fix vao cuoi android/build.gradle (cung cap SDK qua rootProject.ext)
-          cat app/gradle_fix.gradle >> _gen/android/build.gradle
-          echo "----- da them ext vao android/build.gradle -----"
-          tail -10 _gen/android/build.gradle
 
       - name: Build APK
         working-directory: _gen

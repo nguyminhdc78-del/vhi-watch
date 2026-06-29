@@ -10,7 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.6
-  flutter_blue_plus: ^1.32.12     # BLE
+  flutter_blue_plus: ^2.3.9        # BLE (ban 2.x da sua loi gradle compileSdk)
   permission_handler: ^11.3.1     # xin quyen runtime
   geolocator: ^12.0.0             # GPS dien thoai (dan duong tu dong)
   http: ^1.2.2                    # Google Directions API + upload anh
