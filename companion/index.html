@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0E1116">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>VHI Watch</title>
+<style>
+  :root{
+    --bg:#0E1116; --card:#1A1F29; --card2:#11161E; --line:#2A3240;
+    --txt:#E6E9EF; --mut:#8B96A8; --acc:#2266FF; --ok:#22B560; --warn:#E5A23B; --err:#E5484D;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt);
+       padding-bottom:84px;max-width:480px;margin:0 auto}
+  header{position:sticky;top:0;background:rgba(14,17,22,.92);backdrop-filter:blur(8px);
+         padding:14px 16px;display:flex;align-items:center;justify-content:space-between;
+         border-bottom:1px solid var(--line);z-index:10}
+  header h1{font-size:18px;margin:0;display:flex;gap:8px;align-items:center}
+  .pill{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mut);
+        background:var(--card2);padding:6px 10px;border-radius:999px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--err)}
+  .dot.on{background:var(--ok)}
+  main{padding:14px 16px}
+  .tab{display:none}.tab.active{display:block}
+  .card{background:var(--card);border-radius:16px;padding:16px;margin-bottom:12px}
+  .card h3{margin:0 0 12px;font-size:15px}
+  label{font-size:13px;color:var(--mut);display:block;margin:10px 0 4px}
+  input,select{width:100%;padding:13px;border-radius:12px;border:1px solid var(--line);
+        background:var(--card2);color:var(--txt);font-size:15px;outline:none}
+  input:focus,select:focus{border-color:var(--acc)}
+  button{border:0;border-radius:12px;padding:15px;font-size:15px;font-weight:600;width:100%;
+         color:#fff;background:var(--acc);margin-top:12px;transition:transform .05s}
+  button:active{transform:scale(.985)}
+  button.sec{background:#2A3240}
+  button.danger{background:var(--err)}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--txt)}
+  .row{display:flex;gap:10px}.row>*{flex:1}
+  .info{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}
+  .info:last-child{border-bottom:0}
+  .info b{color:var(--mut);font-weight:500}
+  .hint{font-size:13px;color:var(--mut);line-height:1.55}
+  .banner{background:#1d2533;border:1px solid var(--acc);border-radius:12px;padding:12px;font-size:13px;margin-bottom:12px;display:none}
+  .step{display:flex;gap:10px;margin:10px 0;font-size:14px}
+  .step .n{flex:none;width:24px;height:24px;border-radius:50%;background:var(--acc);
+           display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
+  nav{position:fixed;bottom:0;left:0;right:0;max-width:480px;margin:0 auto;display:flex;
+      background:var(--card);border-top:1px solid var(--line)}
+  nav button{background:none;border:0;color:var(--mut);font-weight:500;font-size:11px;
+             padding:10px 0 calc(10px + env(safe-area-inset-bottom));margin:0;border-radius:0;
+             display:flex;flex-direction:column;align-items:center;gap:3px}
+  nav button .ic{font-size:22px}
+  nav button.on{color:var(--acc)}
+  .big{font-size:13px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⌚ VHI Watch</h1>
+  <div class="pill"><span class="dot" id="dot"></span><span id="connTxt">Chưa kết nối</span></div>
+</header>
+
+<main>
+  <!-- Banner canh bao trinh duyet khong ho tro -->
+  <div class="banner" id="iosBanner">
+    📱 <b>iPhone:</b> Safari không hỗ trợ Bluetooth. Hãy cài <b>Bluefy</b> (miễn phí trên App Store)
+    rồi mở lại trang này trong Bluefy để kết nối.
+  </div>
+
+  <!-- ===== TAB: TRANG CHU ===== -->
+  <section class="tab active" id="tab-home">
+    <div class="card">
+      <h3>Kết nối đồng hồ</h3>
+      <p class="hint">Bật đồng hồ rồi nhấn nút bên dưới. App sẽ tự tìm thiết bị <b>VHI-Watch</b>.</p>
+      <button id="btnConn">🔗 Kết nối ngay</button>
+      <button class="danger" id="btnDisc" style="display:none">Ngắt kết nối</button>
+    </div>
+
+    <div class="card" id="cardInfo" style="display:none">
+      <h3>Trạng thái</h3>
+      <div class="info"><b>Thiết bị</b><span id="iDev">—</span></div>
+      <div class="info"><b>Pin</b><span id="iBatt">—</span></div>
+      <div class="info"><b>Đang dẫn đường</b><span id="iNav">Không</span></div>
+      <div class="info"><b>Đồng bộ giờ</b><span id="iTime">—</span></div>
+      <button class="sec" id="btnSync">🕐 Đồng bộ giờ thủ công</button>
+    </div>
+
+    <div class="card" id="cardInstall" style="display:none">
+      <h3>Cài như ứng dụng</h3>
+      <p class="hint">Thêm VHI Watch vào màn hình chính để mở nhanh như app.</p>
+      <button class="ghost" id="btnInstall">⬇️ Cài vào màn hình chính</button>
+    </div>
+  </section>
+
+  <!-- ===== TAB: CHI DUONG ===== -->
+  <section class="tab" id="tab-nav">
+    <div class="card">
+      <h3>Dẫn đường tự động</h3>
+      <p class="hint">Dùng GPS điện thoại + Google Directions để đẩy từng bước rẽ xuống đồng hồ.</p>
+      <label>Google Maps API Key</label>
+      <input id="apiKey" placeholder="AIza...">
+      <label>Điểm đến</label>
+      <input id="dest" placeholder="VD: Hồ Hoàn Kiếm, Hà Nội">
+      <button id="btnRoute">▶️ Bắt đầu dẫn đường</button>
+      <button class="sec" id="btnStopRoute">⏹ Dừng</button>
+      <p class="hint" id="navStat" style="margin-top:10px"></p>
+    </div>
+
+    <div class="card">
+      <h3>Gửi lệnh rẽ thủ công (test)</h3>
+      <label>Hướng rẽ</label>
+      <select id="man">
+        <option value="1">⬆️ Đi thẳng</option>
+        <option value="2">⬅️ Rẽ trái</option>
+        <option value="3">➡️ Rẽ phải</option>
+        <option value="4">↖️ Chếch trái</option>
+        <option value="5">↗️ Chếch phải</option>
+        <option value="8">↩️ Quay đầu</option>
+        <option value="9">🏁 Đã đến nơi</option>
+      </select>
+      <div class="row">
+        <div><label>Cách điểm rẽ (m)</label><input id="dist" type="number" value="150"></div>
+        <div><label>Còn lại (m)</label><input id="remain" type="number" value="3200"></div>
+      </div>
+      <label>Tên đường / hướng dẫn</label>
+      <input id="street" value="Rẽ phải vào Lê Lợi">
+      <label>Giờ đến (ETA)</label>
+      <input id="eta" value="12:34">
+      <button id="btnSend">📤 Gửi xuống đồng hồ</button>
+      <button class="sec" id="btnStop">⏹ Dừng dẫn đường</button>
+    </div>
+  </section>
+
+  <!-- ===== TAB: ANH NEN ===== -->
+  <section class="tab" id="tab-wall">
+    <div class="card">
+      <h3>Đổi ảnh nền đồng hồ</h3>
+      <p class="hint">Ảnh nền truyền qua WiFi của đồng hồ (không qua Bluetooth). Làm theo 3 bước:</p>
+      <div class="step"><span class="n">1</span><span>Trên <b>đồng hồ</b>: Menu → <b>Đổi ảnh nền</b> (đồng hồ bật WiFi).</span></div>
+      <div class="step"><span class="n">2</span><span>Vào WiFi <b>VHI-Watch-Setup</b> (mật khẩu <b>12345678</b>).</span></div>
+      <div class="step"><span class="n">3</span><span>Nhấn nút dưới để mở trang chọn ảnh của đồng hồ.</span></div>
+      <button id="btnOpenWall">🖼️ Mở trang chọn ảnh (192.168.4.1)</button>
+      <p class="hint" style="margin-top:10px">Ảnh tự được cắt vuông &amp; thu nhỏ 240×240 rồi gửi vào đồng hồ.</p>
+    </div>
+  </section>
+</main>
+
+<nav>
+  <button class="on" data-tab="home"><span class="ic">⌚</span>Trang chủ</button>
+  <button data-tab="nav"><span class="ic">🧭</span>Chỉ đường</button>
+  <button data-tab="wall"><span class="ic">🖼️</span>Ảnh nền</button>
+</nav>
+
+<script>
+// ===== UUID khop firmware config.h =====
+const SVC="6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+const NAV="6e400002-b5a3-f393-e0a9-e50e24dcca9e";
+const TIME="6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+const STAT="6e400004-b5a3-f393-e0a9-e50e24dcca9e";
+
+const $=id=>document.getElementById(id);
+const enc=new TextEncoder();
+let dev=null, chNav=null, chTime=null, chStat=null;
+
+// ---------- Tab ----------
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('nav button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  $('tab-'+b.dataset.tab).classList.add('active');
+});
+
+// ---------- Trang thai ket noi ----------
+function setConn(on, name){
+  $('dot').classList.toggle('on', on);
+  $('connTxt').textContent = on ? (name||'Đã kết nối') : 'Chưa kết nối';
+  $('btnConn').style.display = on ? 'none':'block';
+  $('btnDisc').style.display = on ? 'block':'none';
+  $('cardInfo').style.display = on ? 'block':'none';
+  if(on) $('iDev').textContent = name||'VHI-Watch';
+}
+
+// ---------- BLE ----------
+async function connect(){
+  if(!navigator.bluetooth){ alert('Trình duyệt không hỗ trợ Bluetooth. iPhone hãy dùng Bluefy.'); return; }
+  try{
+    $('connTxt').textContent='Đang tìm...';
+    dev = await navigator.bluetooth.requestDevice({ filters:[{services:[SVC]}], optionalServices:[SVC] });
+    dev.addEventListener('gattserverdisconnected', ()=>setConn(false));
+    const srv = await dev.gatt.connect();
+    const s   = await srv.getPrimaryService(SVC);
+    chNav  = await s.getCharacteristic(NAV);
+    chTime = await s.getCharacteristic(TIME);
+    try{
+      chStat = await s.getCharacteristic(STAT);
+      await chStat.startNotifications();
+      chStat.addEventListener('characteristicvaluechanged', e=>{
+        try{
+          const j = JSON.parse(new TextDecoder().decode(e.target.value));
+          if(j.batt!=null) $('iBatt').textContent = j.batt+'%';
+          if(j.nav!=null)  $('iNav').textContent  = j.nav ? 'Có':'Không';
+        }catch(_){}
+      });
+    }catch(_){}
+    setConn(true, dev.name);
+    await syncTime();
+  }catch(e){
+    setConn(false);
+    if(e.name!=='NotFoundError') alert('Lỗi: '+e.message);
+  }
+}
+
+async function disconnect(){ if(dev&&dev.gatt.connected) dev.gatt.disconnect(); setConn(false); }
+
+async function syncTime(){
+  if(!chTime) return;
+  await chTime.writeValue(enc.encode(Math.floor(Date.now()/1000).toString()));
+  const d=new Date();
+  $('iTime').textContent = d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');
+}
+
+async function sendNav(obj){
+  if(!chNav){ alert('Chưa kết nối đồng hồ'); return; }
+  await chNav.writeValue(enc.encode(JSON.stringify(obj)));
+}
+
+$('btnConn').onclick=connect;
+$('btnDisc').onclick=disconnect;
+$('btnSync').onclick=syncTime;
+$('btnSend').onclick=()=>sendNav({m:+$('man').value,d:+$('dist').value,r:+$('remain').value,s:$('street').value,e:$('eta').value});
+$('btnStop').onclick=()=>sendNav({stop:1});
+
+// ---------- Dan duong tu dong ----------
+let watchId=null, steps=[], idx=0;
+const stripHtml=h=>h.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+function mapMan(m){m=m||'';if(m.includes('uturn'))return 8;if(m.includes('sharp-left'))return 7;
+  if(m.includes('sharp-right'))return 6;if(m.includes('slight-left'))return 4;if(m.includes('slight-right'))return 5;
+  if(m.includes('left'))return 2;if(m.includes('right'))return 3;return 1;}
+function dist(a,b){const R=6371000,r=x=>x*Math.PI/180;const dLat=r(b.lat-a.lat),dLng=r(b.lng-a.lng);
+  const x=Math.sin(dLat/2)**2+Math.cos(r(a.lat))*Math.cos(r(b.lat))*Math.sin(dLng/2)**2;return 2*R*Math.asin(Math.sqrt(x));}
+
+async function startRoute(){
+  const key=$('apiKey').value.trim(), dest=$('dest').value.trim();
+  if(!key||!dest){ $('navStat').textContent='Nhập API key và điểm đến'; return; }
+  if(!chNav){ $('navStat').textContent='Hãy kết nối đồng hồ trước'; return; }
+  navigator.geolocation.getCurrentPosition(async pos=>{
+    const o=pos.coords.latitude+','+pos.coords.longitude;
+    const url=`https://maps.googleapis.com/maps/api/directions/json?origin=${o}&destination=${encodeURIComponent(dest)}&mode=driving&language=vi&key=${key}`;
+    try{
+      const j=await (await fetch(url)).json();
+      if(j.status!=='OK'){ $('navStat').textContent='Directions lỗi: '+j.status; return; }
+      const leg=j.routes[0].legs[0];
+      steps=leg.steps.map(s=>({end:{lat:s.end_location.lat,lng:s.end_location.lng},man:mapMan(s.maneuver),text:stripHtml(s.html_instructions)}));
+      idx=0; $('navStat').textContent='Bắt đầu: '+steps.length+' bước · '+leg.distance.text;
+      if(watchId) navigator.geolocation.clearWatch(watchId);
+      watchId=navigator.geolocation.watchPosition(onMove,()=>{},{enableHighAccuracy:true});
+    }catch(e){ $('navStat').textContent='Lỗi: '+e.message; }
+  },e=>$('navStat').textContent='GPS lỗi: '+e.message,{enableHighAccuracy:true});
+}
+function onMove(pos){
+  if(idx>=steps.length) return;
+  const cur={lat:pos.coords.latitude,lng:pos.coords.longitude}, st=steps[idx];
+  const d=Math.round(dist(cur,st.end));
+  let remain=d; for(let i=idx+1;i<steps.length;i++) remain+=Math.round(dist(steps[i-1].end,steps[i].end));
+  sendNav({m:st.man,d,r:remain,s:st.text,e:''});
+  $('navStat').textContent=`Bước ${idx+1}/${steps.length} · ${d}m · ${st.text}`;
+  if(d<25){ idx++; if(idx>=steps.length){ sendNav({m:9,d:0,r:0,s:'Đã đến nơi',e:''}); navigator.geolocation.clearWatch(watchId);} }
+}
+function stopRoute(){ if(watchId){navigator.geolocation.clearWatch(watchId);watchId=null;} sendNav({stop:1}); $('navStat').textContent='Đã dừng'; }
+$('btnRoute').onclick=startRoute;
+$('btnStopRoute').onclick=stopRoute;
+
+// ---------- Anh nen ----------
+$('btnOpenWall').onclick=()=>window.open('http://192.168.4.1/','_blank');
+
+// ---------- PWA install ----------
+let deferred=null;
+window.addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); deferred=e; $('cardInstall').style.display='block'; });
+$('btnInstall').onclick=async()=>{ if(deferred){ deferred.prompt(); await deferred.userChoice; deferred=null; $('cardInstall').style.display='none'; } };
+
+// ---------- Phat hien iOS khong co Web Bluetooth ----------
+const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
+if(isIOS && !navigator.bluetooth) $('iosBanner').style.display='block';
+
+// ---------- Dang ky service worker ----------
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>

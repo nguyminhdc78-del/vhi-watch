@@ -1,0 +1,62 @@
+# Tu dong build APK Android tren may chu GitHub (khong can cai Flutter o may ban).
+# Sau khi chay xong: vao tab "Releases" tai file vhi-watch.apk ve dien thoai de cai.
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+    paths: ["app/**", ".github/workflows/build-apk.yml"]
+  workflow_dispatch:        # cho phep bam chay tay tu tab Actions
+
+permissions:
+  contents: write           # de tao Release dinh kem APK
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.24.5"   # ghim ban on dinh, tranh lech API
+          channel: stable
+          cache: true
+
+      - name: Tao khung project Android + chen source cua minh
+        run: |
+          flutter create --platforms=android --org com.vhitek --project-name vhi_watch _gen
+          rm -rf _gen/lib
+          cp -r app/lib _gen/lib
+          cp app/pubspec.yaml _gen/pubspec.yaml
+          cp app/android_manifest_template.xml _gen/android/app/src/main/AndroidManifest.xml
+
+      - name: Build APK
+        working-directory: _gen
+        run: |
+          flutter pub get
+          flutter build apk --release
+          # build.gradle mac dinh cua Flutter ky release bang debug key -> APK cai duoc luon
+
+      - name: Doi ten APK
+        run: cp _gen/build/app/outputs/flutter-apk/app-release.apk vhi-watch.apk
+
+      - name: Tai len Artifact (tai trong tab Actions)
+        uses: actions/upload-artifact@v4
+        with:
+          name: vhi-watch-apk
+          path: vhi-watch.apk
+
+      - name: Xuat ban Release (link tai co dinh)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: app-latest
+          name: "VHI Watch APK (ban moi nhat)"
+          body: "Tai vhi-watch.apk ben duoi va cai vao dien thoai Android."
+          files: vhi-watch.apk
+          prerelease: true
