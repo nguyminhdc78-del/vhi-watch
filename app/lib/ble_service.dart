@@ -70,7 +70,10 @@ class BleService extends ChangeNotifier {
     final found = Completer<BluetoothDevice?>();
     _scanSub = FlutterBluePlus.onScanResults.listen((results) {
       for (final r in results) {
-        final n = r.device.platformName;
+        // luc quet, ten nam o advName; platformName thuong rong cho toi khi ket noi
+        final n = r.advertisementData.advName.isNotEmpty
+            ? r.advertisementData.advName
+            : r.device.platformName;
         if (n.contains('VHI') && !found.isCompleted) {
           found.complete(r.device);
         }
@@ -108,7 +111,8 @@ class BleService extends ChangeNotifier {
     });
 
     try {
-      await dev.connect(timeout: const Duration(seconds: 12));
+      // License.nonprofit = dung ca nhan/phi loi nhuan (mien phi) theo dieu khoan flutter_blue_plus 2.x
+      await dev.connect(license: License.nonprofit, timeout: const Duration(seconds: 12));
       try {
         await dev.requestMtu(185); // de gui JSON dai (ten duong)
       } catch (_) {}

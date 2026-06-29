@@ -35,6 +35,11 @@ jobs:
           cp -r app/lib _gen/lib
           cp app/pubspec.yaml _gen/pubspec.yaml
           cp app/android_manifest_template.xml _gen/android/app/src/main/AndroidManifest.xml
+          # Dat NDK version cao nhat ma cac plugin yeu cau (tranh canh bao/loi NDK)
+          APPK=_gen/android/app/build.gradle.kts
+          [ -f "$APPK" ] || APPK=_gen/android/app/build.gradle
+          sed -i 's/ndkVersion = flutter.ndkVersion/ndkVersion = "27.0.12077973"/' "$APPK"
+          grep -n ndkVersion "$APPK" || true
 
       - name: Build APK
         working-directory: _gen
