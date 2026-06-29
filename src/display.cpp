@@ -1,50 +1,93 @@
 #include "display.h"
 #include "config.h"
-#include <TFT_eSPI.h>
 
-static TFT_eSPI tft = TFT_eSPI();
+#define LGFX_USE_V1
+#include <LovyanGFX.hpp>
 
-// Buffer ve tung phan: 240 x LVGL_BUF_LINES pixel
+// ============================================================
+//  Cau hinh man hinh ST7789 240x240 SPI cho ESP32-C3 (LovyanGFX)
+//  LovyanGFX xu ly dung SPI2/FSPI cua C3 (TFT_eSPI bi loi tren C3)
+// ============================================================
+class LGFX : public lgfx::LGFX_Device {
+    lgfx::Panel_ST7789 _panel;
+    lgfx::Bus_SPI      _bus;
+    lgfx::Light_PWM    _light;
+public:
+    LGFX() {
+        {   // --- bus SPI ---
+            auto cfg = _bus.config();
+            cfg.spi_host   = SPI2_HOST;   // FSPI tren C3
+            cfg.spi_mode   = 0;
+            cfg.freq_write = LCD_SPI_FREQ;
+            cfg.freq_read  = 16000000;
+            cfg.spi_3wire  = false;
+            cfg.use_lock   = true;
+            cfg.dma_channel = SPI_DMA_CH_AUTO;
+            cfg.pin_sclk   = PIN_LCD_SCLK;
+            cfg.pin_mosi   = PIN_LCD_MOSI;
+            cfg.pin_miso   = -1;
+            cfg.pin_dc     = PIN_LCD_DC;
+            _bus.config(cfg);
+            _panel.setBus(&_bus);
+        }
+        {   // --- panel ST7789 ---
+            auto cfg = _panel.config();
+            cfg.pin_cs        = PIN_LCD_CS;
+            cfg.pin_rst       = PIN_LCD_RST;
+            cfg.pin_busy      = -1;
+            cfg.panel_width   = SCREEN_W;
+            cfg.panel_height  = SCREEN_H;
+            cfg.offset_x      = 0;
+            cfg.offset_y      = 0;
+            cfg.offset_rotation = 0;
+            cfg.readable      = false;
+            cfg.invert        = LCD_INVERT;
+            cfg.rgb_order     = false;   // doi true neu do<->xanh bi nguoc
+            cfg.dlen_16bit    = false;
+            cfg.bus_shared    = false;
+            _panel.config(cfg);
+        }
+        {   // --- den nen PWM ---
+            auto cfg = _light.config();
+            cfg.pin_bl      = PIN_LCD_BL;
+            cfg.invert      = false;
+            cfg.freq        = 5000;
+            cfg.pwm_channel = 0;
+            _light.config(cfg);
+            _panel.setLight(&_light);
+        }
+        setPanel(&_panel);
+    }
+};
+
+static LGFX lcd;
+
+// Buffer ve tung phan (partial) de tiet kiem RAM
 static lv_disp_draw_buf_t draw_buf;
 static lv_color_t buf1[SCREEN_W * LVGL_BUF_LINES];
 
-// PWM backlight (ESP32 LEDC)
-static const int BL_CH   = 0;
-static const int BL_FREQ = 5000;
-static const int BL_RES  = 8;
-
-// LVGL goi ham nay moi khi can day pixel ra man hinh
+// LVGL goi de day pixel ra man hinh
 static void disp_flush(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_p) {
     uint32_t w = area->x2 - area->x1 + 1;
     uint32_t h = area->y2 - area->y1 + 1;
 
-    tft.startWrite();
-    tft.setAddrWindow(area->x1, area->y1, w, h);
-    // tham so cuoi = swap byte; khop voi LV_COLOR_16_SWAP trong lv_conf.h
-    tft.pushColors((uint16_t *)&color_p->full, w * h, true);
-    tft.endWrite();
+    lcd.startWrite();
+    lcd.pushImage(area->x1, area->y1, w, h, (lgfx::rgb565_t *)&color_p->full);
+    lcd.endWrite();
 
     lv_disp_flush_ready(drv);
 }
 
 void display_set_backlight(uint8_t level) {
-    ledcWrite(BL_CH, level);
+    lcd.setBrightness(level);
 }
 
 void display_init() {
-    // --- TFT ---
-    tft.init();
-    tft.setRotation(TFT_ROTATION);
-    tft.fillScreen(TFT_BLACK);
-    // Mot so panel ST7789 1.54" bi am ban -> bo comment dong duoi neu mau bi nguoc
-    // tft.invertDisplay(true);
-
-    // --- Backlight PWM ---
-    ledcSetup(BL_CH, BL_FREQ, BL_RES);
-    ledcAttachPin(TFT_BL, BL_CH);
+    lcd.init();
+    lcd.setRotation(TFT_ROTATION);
+    lcd.fillScreen(0x0000);   // den
     display_set_backlight(BACKLIGHT_DEFAULT);
 
-    // --- LVGL ---
     lv_init();
     lv_disp_draw_buf_init(&draw_buf, buf1, NULL, SCREEN_W * LVGL_BUF_LINES);
 

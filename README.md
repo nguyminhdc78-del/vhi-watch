@@ -21,12 +21,15 @@
 | CS        | Chip select      | **GPIO 7**    | Nếu module không có CS → nối GND, đặt `TFT_CS=-1` |
 | BLK / BL  | Backlight        | **GPIO 5**    | PWM chỉnh độ sáng |
 
-### 2 nút nhấn (nối GPIO → nút → GND, dùng pull-up nội)
+### 3 nút nhấn (nối GPIO → nút → GND, dùng pull-up nội)
 
 | Nút    | ESP32-C3 GPIO | Vai trò |
 |--------|---------------|---------|
-| Nút A  | **GPIO 0**    | Ngắn = NEXT (cuộn) · Giữ = PREV |
-| Nút B  | **GPIO 1**    | Ngắn = ENTER (chọn) · Giữ = ESC (quay lại) |
+| Nút A  | **GPIO 0**    | NEXT — chuyển/cuộn (giữ = cuộn ngược) |
+| Nút B  | **GPIO 1**    | ENTER — chọn / mở menu |
+| Nút C  | **GPIO 9**    | BACK — quay lại (thường là nút BOOT có sẵn trên board) |
+
+> Nút C dùng GPIO 9 = chân BOOT. Đa số board C3 SuperMini đã có sẵn nút BOOT nối GPIO9 → dùng luôn, khỏi đấu thêm. Lưu ý: **đừng giữ nút C lúc cấp nguồn/reset** (sẽ vào chế độ nạp).
 
 ```
    ESP32-C3 mini                 ST7789 240x240

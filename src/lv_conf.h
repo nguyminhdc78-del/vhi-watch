@@ -11,9 +11,8 @@
 
 /*==================== MAU SAC ====================*/
 #define LV_COLOR_DEPTH 16
-/* TFT_eSPI nhan byte theo thu tu swap -> de 1. Neu mau bi sai, doi thanh 0
-   va sua tham so swap trong display.cpp */
-#define LV_COLOR_16_SWAP 1
+/* LovyanGFX pushImage dung mau RGB565 native -> de 0 */
+#define LV_COLOR_16_SWAP 0
 
 /*==================== BO NHO ====================*/
 /* C3 RAM nho -> cap 48KB cho LVGL */

@@ -46,6 +46,9 @@ extern NavState   g_nav;
 extern ClockState g_clock;
 extern SysState   g_sys;
 
+// Co bao: vua nhan xong anh nen moi qua BLE -> UI nap lai
+extern volatile bool g_wpUpdated;
+
 // Lay gio hien tai (epoch giay) tu m2 dong bo
 uint32_t clock_now_epoch();
 void     clock_sync(uint32_t epoch);

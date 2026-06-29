@@ -1,8 +1,8 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
+import '../ble_service.dart';
 
 // ============================================================
 //  Doi anh nen: chon anh -> crop vuong + resize 240x240 ->
@@ -55,23 +55,22 @@ class _WallpaperScreenState extends State<WallpaperScreen> {
 
   Future<void> _send() async {
     if (_rgb565 == null) return;
+    if (!BleService.I.canSendWallpaper) {
+      setState(() => _stat =
+          'Chưa kết nối đồng hồ. Vào tab "Trang chủ" → Kết nối trước.');
+      return;
+    }
     setState(() {
       _sending = true;
-      _stat = 'Đang gửi qua WiFi...';
+      _stat = 'Đang gửi qua Bluetooth... 0%';
     });
     try {
-      final req = http.MultipartRequest(
-          'POST', Uri.parse('http://192.168.4.1/upload'));
-      req.files.add(http.MultipartFile.fromBytes('img', _rgb565!,
-          filename: 'wallpaper.bin'));
-      final res = await req.send().timeout(const Duration(seconds: 20));
-      final body = await res.stream.bytesToString();
-      setState(() => _stat = res.statusCode == 200
-          ? '✅ Thành công! $body'
-          : 'Lỗi HTTP ${res.statusCode}');
+      await BleService.I.sendWallpaper(_rgb565!, onProgress: (p) {
+        setState(() => _stat = 'Đang gửi... ${(p * 100).toStringAsFixed(0)}%');
+      });
+      setState(() => _stat = '✅ Đã gửi xong! Đồng hồ sẽ hiện ảnh sau vài giây.');
     } catch (e) {
-      setState(() =>
-          _stat = 'Không gửi được. Kiểm tra đã vào WiFi VHI-Watch-Setup chưa?\n$e');
+      setState(() => _stat = 'Lỗi gửi: $e');
     } finally {
       setState(() => _sending = false);
     }
@@ -92,9 +91,9 @@ class _WallpaperScreenState extends State<WallpaperScreen> {
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
                 Text(
-                  'Bước 1: Trên đồng hồ chọn Menu → Đổi ảnh nền.\n'
-                  'Bước 2: Vào WiFi "VHI-Watch-Setup" (mật khẩu 12345678).\n'
-                  'Bước 3: Chọn ảnh rồi gửi.',
+                  '1. Kết nối đồng hồ qua Bluetooth (tab Trang chủ).\n'
+                  '2. Chọn ảnh bên dưới.\n'
+                  '3. Nhấn "Gửi vào đồng hồ" — chờ ~30 giây.',
                   style: TextStyle(color: Colors.grey[400], height: 1.5, fontSize: 13),
                 ),
                 const SizedBox(height: 14),

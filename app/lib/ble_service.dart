@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -17,9 +18,10 @@ class BleService extends ChangeNotifier {
   static const _navUuid = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
   static const _timeUuid = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
   static const _statUuid = "6e400004-b5a3-f393-e0a9-e50e24dcca9e";
+  static const _wpUuid   = "6e400005-b5a3-f393-e0a9-e50e24dcca9e";
 
   BluetoothDevice? _device;
-  BluetoothCharacteristic? _nav, _time, _stat;
+  BluetoothCharacteristic? _nav, _time, _stat, _wp;
   StreamSubscription<BluetoothConnectionState>? _connSub;
   StreamSubscription<List<ScanResult>>? _scanSub;
   StreamSubscription<List<int>>? _statSub;
@@ -114,7 +116,7 @@ class BleService extends ChangeNotifier {
       // License.nonprofit = dung ca nhan/phi loi nhuan (mien phi) theo dieu khoan flutter_blue_plus 2.x
       await dev.connect(license: License.nonprofit, timeout: const Duration(seconds: 12));
       try {
-        await dev.requestMtu(185); // de gui JSON dai (ten duong)
+        await dev.requestMtu(247); // MTU lon -> gui anh nen qua BLE nhanh hon
       } catch (_) {}
 
       final services = await dev.discoverServices();
@@ -125,6 +127,7 @@ class BleService extends ChangeNotifier {
             if (u == _navUuid) _nav = c;
             else if (u == _timeUuid) _time = c;
             else if (u == _statUuid) _stat = c;
+            else if (u == _wpUuid) _wp = c;
           }
         }
       }
@@ -158,9 +161,25 @@ class BleService extends ChangeNotifier {
 
   void _onDisconnect() {
     connected = false;
-    _nav = _time = _stat = null;
+    _nav = _time = _stat = _wp = null;
     status = 'Mất kết nối';
     notifyListeners();
+  }
+
+  bool get canSendWallpaper => _wp != null;
+
+  // Gui anh nen RGB565 (240x240 = 115200 byte) xuong dong ho theo tung chunk
+  Future<void> sendWallpaper(Uint8List data,
+      {required void Function(double) onProgress}) async {
+    if (_wp == null) throw Exception('Chưa kết nối đồng hồ');
+    int mtu = 23;
+    try { mtu = _device?.mtuNow ?? 23; } catch (_) {}
+    final int chunk = (mtu - 5).clamp(20, 240);
+    for (int i = 0; i < data.length; i += chunk) {
+      final int end = (i + chunk < data.length) ? i + chunk : data.length;
+      await _wp!.write(data.sublist(i, end), withoutResponse: false);
+      onProgress(end / data.length);
+    }
   }
 
   Future<void> disconnect() async {

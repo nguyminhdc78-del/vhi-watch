@@ -3,6 +3,7 @@
 NavState   g_nav;
 ClockState g_clock;
 SysState   g_sys;
+volatile bool g_wpUpdated = false;
 
 void clock_sync(uint32_t epoch) {
     g_clock.epoch  = epoch;

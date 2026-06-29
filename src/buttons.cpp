@@ -20,6 +20,7 @@ struct Btn {
 
 static Btn btnA = { PIN_BTN_A, false, 0, 0, false };
 static Btn btnB = { PIN_BTN_B, false, 0, 0, false };
+static Btn btnC = { PIN_BTN_C, false, 0, 0, false };
 
 // Hang doi key don gian (ring buffer)
 static uint32_t keyQueue[8];
@@ -65,8 +66,10 @@ static void updateBtn(Btn &b, uint32_t keyShort, uint32_t keyLong) {
 }
 
 void buttons_task() {
-    updateBtn(btnA, LV_KEY_NEXT,  LV_KEY_PREV);
-    updateBtn(btnB, LV_KEY_ENTER, LV_KEY_ESC);
+    // Dung DOWN/UP (khong dung NEXT/PREV vi LVGL nuot NEXT/PREV cho focus noi bo)
+    updateBtn(btnA, LV_KEY_DOWN,  LV_KEY_UP);     // A: cuon xuong (giu = len)
+    updateBtn(btnB, LV_KEY_ENTER, LV_KEY_ENTER);  // B: chon
+    updateBtn(btnC, LV_KEY_ESC,   LV_KEY_ESC);    // C: quay lai
 }
 
 // LVGL goi de doc input
@@ -97,6 +100,7 @@ static void keypad_read(lv_indev_drv_t *drv, lv_indev_data_t *data) {
 lv_group_t* buttons_init() {
     pinMode(PIN_BTN_A, BTN_ACTIVE_LOW ? INPUT_PULLUP : INPUT);
     pinMode(PIN_BTN_B, BTN_ACTIVE_LOW ? INPUT_PULLUP : INPUT);
+    pinMode(PIN_BTN_C, BTN_ACTIVE_LOW ? INPUT_PULLUP : INPUT);
 
     static lv_indev_drv_t indev_drv;
     lv_indev_drv_init(&indev_drv);

@@ -3,6 +3,7 @@
 #include "app_state.h"
 #include "storage.h"
 #include "web_upload.h"
+#include "ble_nav.h"
 #include <time.h>
 
 // ============================================================
@@ -30,7 +31,9 @@ static const int   MENU_N = 4;
 static int         menuSel = 0;
 static lv_obj_t   *menuBtns[MENU_N];
 
-static void show_screen(Screen s);   // forward
+static void show_screen(Screen s);     // forward
+static void request_screen(Screen s);  // forward: doi man hinh AN TOAN (hoan ngoai event)
+static int  g_pendingScreen = -1;
 
 // ---------- tien ich ----------
 static lv_obj_t* make_root() {
@@ -131,10 +134,10 @@ static void build_menu(lv_obj_t *scr) {
 
 static void menu_activate() {
     switch (menuSel) {
-        case 0: show_screen(SCR_NAV);    break;
-        case 1: show_screen(SCR_UPLOAD); break;
-        case 2: /* TODO: cai dat */      break;
-        case 3: /* TODO: thong tin */    break;
+        case 0: request_screen(SCR_NAV);    break;
+        case 1: request_screen(SCR_UPLOAD); break;
+        case 2: /* TODO: cai dat */         break;
+        case 3: /* TODO: thong tin */       break;
     }
 }
 
@@ -198,8 +201,7 @@ static void update_nav() {
 //  UPLOAD (WiFi AP)
 // ============================================================
 static void build_upload(lv_obj_t *scr) {
-    web_start();   // bat AP
-
+    // Anh nen gui qua Bluetooth (khong dung WiFi nua)
     lv_obj_t *t = lv_label_create(scr);
     lv_obj_set_style_text_font(t, &lv_font_montserrat_20, 0);
     lv_obj_set_style_text_color(t, lv_color_white(), 0);
@@ -212,44 +214,56 @@ static void build_upload(lv_obj_t *scr) {
     lv_obj_set_width(info, 210);
     lv_label_set_long_mode(info, LV_LABEL_LONG_WRAP);
     lv_obj_set_style_text_align(info, LV_TEXT_ALIGN_CENTER, 0);
-    char msg[160];
-    snprintf(msg, sizeof(msg),
-        "1. Dien thoai vao WiFi:\n%s\nMK: %s\n\n2. Mo trinh duyet:\nhttp://192.168.4.1\n\n3. Chon anh & gui",
-        WIFI_AP_SSID, WIFI_AP_PASS);
-    lv_label_set_text(info, msg);
+    lv_label_set_text(info,
+        "Mo app dien thoai\n(da ket noi Bluetooth)\n\n"
+        "Tab \"Anh nen\"\n-> Chon anh -> Gui\n\n"
+        "Anh tu hien sau ~30 giay");
     lv_obj_center(info);
 
     lv_obj_t *hint = lv_label_create(scr);
     lv_obj_set_style_text_font(hint, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(hint, lv_color_hex(0x555555), 0);
-    lv_label_set_text(hint, "Giu B = Thoat");
+    lv_label_set_text(hint, "Nhan C = Quay lai");
     lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -8);
 }
 
 // ============================================================
 //  XU LY PHIM (gan vao container goc moi man hinh)
 // ============================================================
+// Hoan viec doi man hinh ra ngoai event handler (LVGL goi lai o vong timer ke tiep)
+static void switch_screen_cb(void *unused) {
+    if (g_pendingScreen >= 0) {
+        Screen s = (Screen)g_pendingScreen;
+        g_pendingScreen = -1;
+        show_screen(s);
+    }
+}
+static void request_screen(Screen s) {
+    g_pendingScreen = (int)s;
+    lv_async_call(switch_screen_cb, NULL);
+}
+
 static void key_handler(lv_event_t *e) {
     uint32_t key = lv_event_get_key(e);
 
     switch (g_cur) {
         case SCR_WATCH:
-            if (key == LV_KEY_ENTER) show_screen(SCR_MENU);
+            if (key == LV_KEY_ENTER) request_screen(SCR_MENU);
             break;
 
         case SCR_MENU:
-            if (key == LV_KEY_NEXT)       { menuSel = (menuSel + 1) % MENU_N; refresh_menu_highlight(); }
-            else if (key == LV_KEY_PREV)  { menuSel = (menuSel - 1 + MENU_N) % MENU_N; refresh_menu_highlight(); }
+            if (key == LV_KEY_DOWN)       { menuSel = (menuSel + 1) % MENU_N; refresh_menu_highlight(); }
+            else if (key == LV_KEY_UP)    { menuSel = (menuSel - 1 + MENU_N) % MENU_N; refresh_menu_highlight(); }
             else if (key == LV_KEY_ENTER) menu_activate();
-            else if (key == LV_KEY_ESC)   show_screen(SCR_WATCH);
+            else if (key == LV_KEY_ESC)   request_screen(SCR_WATCH);
             break;
 
         case SCR_NAV:
-            if (key == LV_KEY_ESC) show_screen(SCR_MENU);
+            if (key == LV_KEY_ESC) request_screen(SCR_MENU);
             break;
 
         case SCR_UPLOAD:
-            if (key == LV_KEY_ESC) { web_stop(); show_screen(SCR_MENU); }
+            if (key == LV_KEY_ESC) request_screen(SCR_MENU);  // show_screen tu tat WiFi + bat lai BLE
             break;
     }
 }
@@ -311,6 +325,9 @@ void ui_reload_wallpaper() {
 }
 
 void ui_tick() {
+    // Vua nhan xong anh nen moi qua BLE -> nap lai
+    if (g_wpUpdated) { g_wpUpdated = false; ui_reload_wallpaper(); }
+
     // Cap nhat dong ho
     if (g_cur == SCR_WATCH && lblTime) {
         uint32_t ep = clock_now_epoch();
