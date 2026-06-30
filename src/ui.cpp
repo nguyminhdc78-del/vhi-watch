@@ -12,7 +12,7 @@
 //    NEXT/PREV = di chuyen, ENTER = chon, ESC = quay lai
 // ============================================================
 
-enum Screen { SCR_WATCH, SCR_MENU, SCR_NAV, SCR_UPLOAD };
+enum Screen { SCR_WATCH, SCR_MENU, SCR_NAV, SCR_UPLOAD, SCR_NOTIFY, SCR_MUSIC };
 
 static lv_group_t *g_group   = nullptr;
 static lv_obj_t   *g_scr     = nullptr;   // man hinh hien tai
@@ -22,17 +22,20 @@ static Screen      g_cur     = SCR_WATCH;
 static lv_obj_t *lblTime = nullptr, *lblDate = nullptr, *lblStat = nullptr;
 static lv_obj_t *navArrow = nullptr, *navDist = nullptr, *navStreet = nullptr, *navEta = nullptr;
 static lv_obj_t *navLine = nullptr, *navDot = nullptr;
+static lv_obj_t *lblNApp = nullptr, *lblNTitle = nullptr, *lblNText = nullptr;
+static lv_obj_t *lblMTitle = nullptr, *lblMArtist = nullptr, *lblMState = nullptr;
 static lv_point_t g_linePts[MAX_ROUTE_PTS];
 // Tam vung ve lo trinh (cham vi tri ban) - hoi thap de duong phia truoc huong len
 #define ROUTE_CX 120
 #define ROUTE_CY 184
 
 // Menu
-static const char *MENU_ITEMS[] = { LV_SYMBOL_GPS " Chi duong",
-                                    LV_SYMBOL_IMAGE " Doi anh nen",
-                                    LV_SYMBOL_SETTINGS " Cai dat",
-                                    LV_SYMBOL_BELL " Thong tin" };
-static const int   MENU_N = 4;
+static const char *MENU_ITEMS[] = { LV_SYMBOL_GPS    " Chi duong",
+                                    LV_SYMBOL_BELL   " Thong bao",
+                                    LV_SYMBOL_AUDIO  " Nhac",
+                                    LV_SYMBOL_IMAGE  " Doi anh nen",
+                                    LV_SYMBOL_SETTINGS " Cai dat" };
+static const int   MENU_N = 5;
 static int         menuSel = 0;
 static lv_obj_t   *menuBtns[MENU_N];
 
@@ -140,9 +143,10 @@ static void build_menu(lv_obj_t *scr) {
 static void menu_activate() {
     switch (menuSel) {
         case 0: request_screen(SCR_NAV);    break;
-        case 1: request_screen(SCR_UPLOAD); break;
-        case 2: /* TODO: cai dat */         break;
-        case 3: /* TODO: thong tin */       break;
+        case 1: request_screen(SCR_NOTIFY); break;
+        case 2: request_screen(SCR_MUSIC);  break;
+        case 3: request_screen(SCR_UPLOAD); break;
+        case 4: /* TODO: cai dat */         break;
     }
 }
 
@@ -233,6 +237,105 @@ static void update_nav() {
 }
 
 // ============================================================
+//  THONG BAO
+// ============================================================
+static void build_notify(lv_obj_t *scr) {
+    g_notify.hasNew = false;   // da xem
+
+    lv_obj_t *t = lv_label_create(scr);
+    lv_obj_set_style_text_font(t, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(t, lv_color_hex(0x66CC66), 0);
+    lv_label_set_text(t, LV_SYMBOL_BELL " Thong bao");
+    lv_obj_align(t, LV_ALIGN_TOP_MID, 0, 8);
+
+    lblNApp = lv_label_create(scr);
+    lv_obj_set_style_text_font(lblNApp, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(lblNApp, lv_color_hex(0x33CCFF), 0);
+    lv_obj_align(lblNApp, LV_ALIGN_TOP_MID, 0, 40);
+
+    lblNTitle = lv_label_create(scr);
+    lv_obj_set_style_text_font(lblNTitle, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(lblNTitle, lv_color_white(), 0);
+    lv_obj_set_width(lblNTitle, 214);
+    lv_label_set_long_mode(lblNTitle, LV_LABEL_LONG_DOT);
+    lv_obj_set_style_text_align(lblNTitle, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(lblNTitle, LV_ALIGN_TOP_MID, 0, 64);
+
+    lblNText = lv_label_create(scr);
+    lv_obj_set_style_text_font(lblNText, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(lblNText, lv_color_hex(0xCCCCCC), 0);
+    lv_obj_set_width(lblNText, 214);
+    lv_label_set_long_mode(lblNText, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_align(lblNText, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(lblNText, LV_ALIGN_CENTER, 0, 24);
+
+    lv_obj_t *hint = lv_label_create(scr);
+    lv_obj_set_style_text_font(hint, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(hint, lv_color_hex(0x555555), 0);
+    lv_label_set_text(hint, "Nhan C = Quay lai");
+    lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -8);
+}
+
+static void update_notify() {
+    if (g_cur != SCR_NOTIFY || !lblNTitle) return;
+    if (g_notify.title[0] == 0 && g_notify.text[0] == 0) {
+        lv_label_set_text(lblNApp, "");
+        lv_label_set_text(lblNTitle, "Khong co thong bao");
+        lv_label_set_text(lblNText, "");
+        return;
+    }
+    lv_label_set_text(lblNApp, g_notify.app);
+    lv_label_set_text(lblNTitle, g_notify.title);
+    lv_label_set_text(lblNText, g_notify.text);
+}
+
+// ============================================================
+//  NHAC
+// ============================================================
+static void build_music(lv_obj_t *scr) {
+    lv_obj_t *t = lv_label_create(scr);
+    lv_obj_set_style_text_font(t, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(t, lv_color_hex(0xE5A23B), 0);
+    lv_label_set_text(t, LV_SYMBOL_AUDIO " Nhac");
+    lv_obj_align(t, LV_ALIGN_TOP_MID, 0, 8);
+
+    lblMTitle = lv_label_create(scr);
+    lv_obj_set_style_text_font(lblMTitle, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(lblMTitle, lv_color_white(), 0);
+    lv_obj_set_width(lblMTitle, 214);
+    lv_label_set_long_mode(lblMTitle, LV_LABEL_LONG_SCROLL_CIRCULAR);
+    lv_obj_set_style_text_align(lblMTitle, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(lblMTitle, LV_ALIGN_TOP_MID, 0, 48);
+
+    lblMArtist = lv_label_create(scr);
+    lv_obj_set_style_text_font(lblMArtist, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(lblMArtist, lv_color_hex(0xAAAAAA), 0);
+    lv_obj_set_width(lblMArtist, 214);
+    lv_label_set_long_mode(lblMArtist, LV_LABEL_LONG_DOT);
+    lv_obj_set_style_text_align(lblMArtist, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(lblMArtist, LV_ALIGN_TOP_MID, 0, 82);
+
+    lblMState = lv_label_create(scr);
+    lv_obj_set_style_text_font(lblMState, &lv_font_montserrat_48, 0);
+    lv_obj_set_style_text_color(lblMState, lv_color_hex(0x33CCFF), 0);
+    lv_label_set_text(lblMState, LV_SYMBOL_PLAY);
+    lv_obj_align(lblMState, LV_ALIGN_CENTER, 0, 24);
+
+    lv_obj_t *hint = lv_label_create(scr);
+    lv_obj_set_style_text_font(hint, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(hint, lv_color_hex(0x777777), 0);
+    lv_label_set_text(hint, "A:sau  B:phat/dung  C:thoat");
+    lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -8);
+}
+
+static void update_music() {
+    if (g_cur != SCR_MUSIC || !lblMTitle) return;
+    lv_label_set_text(lblMTitle, g_music.title[0] ? g_music.title : "Chua co nhac");
+    lv_label_set_text(lblMArtist, g_music.artist);
+    lv_label_set_text(lblMState, g_music.playing ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY);
+}
+
+// ============================================================
 //  UPLOAD (WiFi AP)
 // ============================================================
 static void build_upload(lv_obj_t *scr) {
@@ -300,6 +403,17 @@ static void key_handler(lv_event_t *e) {
         case SCR_UPLOAD:
             if (key == LV_KEY_ESC) request_screen(SCR_MENU);  // show_screen tu tat WiFi + bat lai BLE
             break;
+
+        case SCR_NOTIFY:
+            if (key == LV_KEY_ESC) request_screen(SCR_MENU);
+            break;
+
+        case SCR_MUSIC:
+            if (key == LV_KEY_DOWN)       ble_send_media("next");
+            else if (key == LV_KEY_UP)    ble_send_media("prev");
+            else if (key == LV_KEY_ENTER) ble_send_media("playpause");
+            else if (key == LV_KEY_ESC)   request_screen(SCR_MENU);
+            break;
     }
 }
 
@@ -315,6 +429,8 @@ static void show_screen(Screen s) {
     lblTime = lblDate = lblStat = nullptr;
     navArrow = navDist = navStreet = navEta = nullptr;
     navLine = navDot = nullptr;
+    lblNApp = lblNTitle = lblNText = nullptr;
+    lblMTitle = lblMArtist = lblMState = nullptr;
 
     g_scr = make_root();
     g_cur = s;
@@ -331,6 +447,8 @@ static void show_screen(Screen s) {
         case SCR_MENU:   build_menu(g_scr);      break;
         case SCR_NAV:    build_nav(g_scr);       break;
         case SCR_UPLOAD: build_upload(g_scr);    break;
+        case SCR_NOTIFY: build_notify(g_scr);    break;
+        case SCR_MUSIC:  build_music(g_scr);     break;
     }
 
     lv_scr_load(g_scr);
@@ -342,7 +460,9 @@ static void show_screen(Screen s) {
 
     if (old) lv_obj_del(old);
 
-    if (s == SCR_NAV) update_nav();
+    if (s == SCR_NAV)    update_nav();
+    if (s == SCR_NOTIFY) update_notify();
+    if (s == SCR_MUSIC)  update_music();
 }
 
 // ============================================================
@@ -363,6 +483,9 @@ void ui_reload_wallpaper() {
 void ui_tick() {
     // Vua nhan xong anh nen moi qua BLE -> nap lai
     if (g_wpUpdated) { g_wpUpdated = false; ui_reload_wallpaper(); }
+
+    // Co thong bao moi -> tu mo man Thong bao (khi dang o man dong ho)
+    if (g_notify.hasNew && g_cur == SCR_WATCH) request_screen(SCR_NOTIFY);
 
     // Cap nhat dong ho
     if (g_cur == SCR_WATCH && lblTime) {
@@ -389,4 +512,6 @@ void ui_tick() {
 
     update_nav();
     route_refresh();
+    update_notify();
+    update_music();
 }

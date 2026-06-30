@@ -2,8 +2,24 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
+
+// Bo dau tieng Viet (font dong ho khong co dau)
+String vnNoAccent(String s) {
+  const groups = {
+    'a': 'àáạảãâầấậẩẫăằắặẳẵ', 'e': 'èéẹẻẽêềếệểễ', 'i': 'ìíịỉĩ',
+    'o': 'òóọỏõôồốộổỗơờớợởỡ', 'u': 'ùúụủũưừứựửữ', 'y': 'ỳýỵỷỹ', 'd': 'đ',
+  };
+  var out = s;
+  groups.forEach((base, accents) {
+    for (final ch in accents.split('')) {
+      out = out.replaceAll(ch, base).replaceAll(ch.toUpperCase(), base.toUpperCase());
+    }
+  });
+  return out;
+}
 
 // ============================================================
 //  Quan ly ket noi BLE toi dong ho VHI-Watch.
@@ -18,14 +34,20 @@ class BleService extends ChangeNotifier {
   static const _navUuid = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
   static const _timeUuid = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
   static const _statUuid = "6e400004-b5a3-f393-e0a9-e50e24dcca9e";
-  static const _wpUuid    = "6e400005-b5a3-f393-e0a9-e50e24dcca9e";
-  static const _routeUuid = "6e400006-b5a3-f393-e0a9-e50e24dcca9e";
+  static const _wpUuid     = "6e400005-b5a3-f393-e0a9-e50e24dcca9e";
+  static const _routeUuid  = "6e400006-b5a3-f393-e0a9-e50e24dcca9e";
+  static const _notifyUuid = "6e400007-b5a3-f393-e0a9-e50e24dcca9e";
+  static const _musicUuid  = "6e400008-b5a3-f393-e0a9-e50e24dcca9e";
+  static const _mediaUuid  = "6e400009-b5a3-f393-e0a9-e50e24dcca9e";
+
+  static const _mediaCh = MethodChannel('vhi/media'); // gui phim media Android
 
   BluetoothDevice? _device;
-  BluetoothCharacteristic? _nav, _time, _stat, _wp, _route;
+  BluetoothCharacteristic? _nav, _time, _stat, _wp, _route, _notify, _music, _media;
   StreamSubscription<BluetoothConnectionState>? _connSub;
   StreamSubscription<List<ScanResult>>? _scanSub;
   StreamSubscription<List<int>>? _statSub;
+  StreamSubscription<List<int>>? _mediaSub;
 
   // trang thai cho UI
   bool connected = false;
@@ -130,6 +152,9 @@ class BleService extends ChangeNotifier {
             else if (u == _statUuid) _stat = c;
             else if (u == _wpUuid) _wp = c;
             else if (u == _routeUuid) _route = c;
+            else if (u == _notifyUuid) _notify = c;
+            else if (u == _musicUuid) _music = c;
+            else if (u == _mediaUuid) _media = c;
           }
         }
       }
@@ -137,6 +162,12 @@ class BleService extends ChangeNotifier {
       if (_stat != null) {
         await _stat!.setNotifyValue(true);
         _statSub = _stat!.onValueReceived.listen(_onStatus);
+      }
+
+      // lang nghe lenh dieu khien nhac tu dong ho -> bam phim media Android
+      if (_media != null) {
+        await _media!.setNotifyValue(true);
+        _mediaSub = _media!.onValueReceived.listen(_onMediaCmd);
       }
 
       connected = true;
@@ -163,13 +194,50 @@ class BleService extends ChangeNotifier {
 
   void _onDisconnect() {
     connected = false;
-    _nav = _time = _stat = _wp = _route = null;
+    _mediaSub?.cancel();
+    _nav = _time = _stat = _wp = _route = _notify = _music = _media = null;
     status = 'Mất kết nối';
     notifyListeners();
   }
 
+  // Dong ho gui "next"/"prev"/"playpause" -> bam phim media he thong
+  void _onMediaCmd(List<int> data) {
+    final cmd = utf8.decode(data, allowMalformed: true);
+    int code = 0;
+    if (cmd == 'next') code = 87;          // KEYCODE_MEDIA_NEXT
+    else if (cmd == 'prev') code = 88;     // KEYCODE_MEDIA_PREVIOUS
+    else if (cmd == 'playpause') code = 85;// KEYCODE_MEDIA_PLAY_PAUSE
+    if (code != 0) {
+      _mediaCh.invokeMethod('mediaKey', {'code': code}).catchError((_) {});
+    }
+  }
+
   bool get canSendWallpaper => _wp != null;
   bool get canSendRoute => _route != null;
+
+  String _clip(String s, int n) => s.length > n ? s.substring(0, n) : s;
+
+  // Gui thong bao xuong dong ho
+  Future<void> sendNotify(String app, String title, String text) async {
+    if (_notify == null) return;
+    final js = jsonEncode({
+      'app': vnNoAccent(_clip(app, 22)),
+      'title': vnNoAccent(_clip(title, 46)),
+      'text': vnNoAccent(_clip(text, 90)),
+    });
+    try { await _notify!.write(utf8.encode(js), withoutResponse: true); } catch (_) {}
+  }
+
+  // Gui bai hat dang phat xuong dong ho
+  Future<void> sendMusic(String title, String artist, bool playing) async {
+    if (_music == null) return;
+    final js = jsonEncode({
+      'title': vnNoAccent(_clip(title, 46)),
+      'artist': vnNoAccent(_clip(artist, 46)),
+      'playing': playing ? 1 : 0,
+    });
+    try { await _music!.write(utf8.encode(js), withoutResponse: true); } catch (_) {}
+  }
 
   // Gui duong line lo trinh (byte[0]=so diem, sau do la cac cap x,y int8)
   Future<void> sendRoute(Uint8List bytes) async {

@@ -115,6 +115,33 @@ class RouteCB : public NimBLECharacteristicCallbacks {
     }
 };
 
+// Thong bao tu dien thoai: {"app":"...","title":"...","text":"..."}
+class NotifyCB : public NimBLECharacteristicCallbacks {
+    void onWrite(NimBLECharacteristic *c) override {
+        std::string v = c->getValue();
+        StaticJsonDocument<320> doc;
+        if (deserializeJson(doc, v.c_str()) != DeserializationError::Ok) return;
+        strlcpy(g_notify.app,   doc["app"]   | "", sizeof(g_notify.app));
+        strlcpy(g_notify.title, doc["title"] | "", sizeof(g_notify.title));
+        strlcpy(g_notify.text,  doc["text"]  | "", sizeof(g_notify.text));
+        g_notify.hasNew = true;
+    }
+};
+
+// Bai hat dang phat: {"title":"...","artist":"...","playing":1}
+class MusicCB : public NimBLECharacteristicCallbacks {
+    void onWrite(NimBLECharacteristic *c) override {
+        std::string v = c->getValue();
+        StaticJsonDocument<256> doc;
+        if (deserializeJson(doc, v.c_str()) != DeserializationError::Ok) return;
+        strlcpy(g_music.title,  doc["title"]  | "", sizeof(g_music.title));
+        strlcpy(g_music.artist, doc["artist"] | "", sizeof(g_music.artist));
+        g_music.playing = (doc["playing"] | 0) != 0;
+    }
+};
+
+static NimBLECharacteristic *chrMedia = nullptr;
+
 void ble_init() {
     NimBLEDevice::init(BLE_DEVICE_NAME);
     NimBLEDevice::setPower(ESP_PWR_LVL_P9);
@@ -145,6 +172,19 @@ void ble_init() {
                                   NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
     chrRoute->setCallbacks(new RouteCB());
 
+    NimBLECharacteristic *chrNotify =
+        svc->createCharacteristic(BLE_CHR_NOTIFY_UUID,
+                                  NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
+    chrNotify->setCallbacks(new NotifyCB());
+
+    NimBLECharacteristic *chrMusic =
+        svc->createCharacteristic(BLE_CHR_MUSIC_UUID,
+                                  NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
+    chrMusic->setCallbacks(new MusicCB());
+
+    chrMedia = svc->createCharacteristic(
+        BLE_CHR_MEDIA_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
+
     svc->start();
 
     NimBLEAdvertising *adv = NimBLEDevice::getAdvertising();
@@ -158,7 +198,15 @@ void ble_stop() {
     NimBLEDevice::deinit(true);   // giai phong controller + RAM cho WiFi
     g_sys.bleConnected = false;
     chrStatus = nullptr;
+    chrMedia  = nullptr;
     Serial.println("[BLE] Da tat de nhuong song cho WiFi");
+}
+
+// Gui lenh dieu khien nhac len dien thoai: "next" / "prev" / "playpause"
+void ble_send_media(const char *cmd) {
+    if (!chrMedia || !g_sys.bleConnected) return;
+    chrMedia->setValue((uint8_t *)cmd, strlen(cmd));
+    chrMedia->notify();
 }
 
 void ble_notify_status() {

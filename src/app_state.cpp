@@ -4,9 +4,13 @@ NavState   g_nav;
 ClockState g_clock;
 SysState   g_sys;
 volatile bool g_wpUpdated = false;
+
 volatile int  g_routeCount = 0;
 int8_t        g_routeXY[MAX_ROUTE_PTS * 2];
 volatile bool g_routeDirty = false;
+
+NotifyState g_notify;
+MusicState  g_music;
 
 void clock_sync(uint32_t epoch) {
     g_clock.epoch  = epoch;

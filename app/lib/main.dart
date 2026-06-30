@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'theme.dart';
 import 'ble_service.dart';
+import 'smartwatch_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/navigate_screen.dart';
 import 'screens/wallpaper_screen.dart';
@@ -29,6 +30,12 @@ class RootPage extends StatefulWidget {
 class _RootPageState extends State<RootPage> {
   int _idx = 0;
   final _pages = const [HomeScreen(), NavigateScreen(), WallpaperScreen()];
+
+  @override
+  void initState() {
+    super.initState();
+    SmartwatchService.I.start(); // bat dau lang nghe thong bao
+  }
 
   @override
   Widget build(BuildContext context) {

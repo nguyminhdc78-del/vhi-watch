@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../ble_service.dart';
+import '../smartwatch_service.dart';
 import '../theme.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -87,6 +88,29 @@ class HomeScreen extends StatelessWidget {
                       '2. Bật Bluetooth + Vị trí trên điện thoại.\n'
                       '3. Nhấn "Kết nối ngay" và chọn VHI-Watch.',
                       style: TextStyle(color: Colors.grey[400], height: 1.5),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Thông báo & Nhạc',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Cho phép app đọc thông báo để hiện tin nhắn / bài hát đang phát lên đồng hồ. Bấm nút dưới rồi bật "VHI Watch" trong danh sách.',
+                      style: TextStyle(color: Colors.grey[400], height: 1.4),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: () => SmartwatchService.I.requestAccess(),
+                      icon: const Icon(Icons.notifications_active),
+                      label: const Text('Bật quyền đọc thông báo'),
                     ),
                   ],
                 ),

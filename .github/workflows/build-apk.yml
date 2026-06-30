@@ -35,6 +35,7 @@ jobs:
           cp -r app/lib _gen/lib
           cp app/pubspec.yaml _gen/pubspec.yaml
           cp app/android_manifest_template.xml _gen/android/app/src/main/AndroidManifest.xml
+          cp app/MainActivity.kt _gen/android/app/src/main/kotlin/com/vhitek/vhi_watch/MainActivity.kt
           # Dat NDK version cao nhat ma cac plugin yeu cau (tranh canh bao/loi NDK)
           APPK=_gen/android/app/build.gradle.kts
           [ -f "$APPK" ] || APPK=_gen/android/app/build.gradle

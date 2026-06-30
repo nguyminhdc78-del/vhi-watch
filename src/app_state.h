@@ -55,6 +55,23 @@ extern volatile int  g_routeCount;
 extern int8_t        g_routeXY[MAX_ROUTE_PTS * 2];
 extern volatile bool g_routeDirty;
 
+// --- Thong bao tu dien thoai ---
+struct NotifyState {
+    char app[24]   = "";
+    char title[48] = "";
+    char text[96]  = "";
+    bool hasNew     = false;   // co thong bao moi chua xem
+};
+extern NotifyState g_notify;
+
+// --- Bai hat dang phat ---
+struct MusicState {
+    char title[48]  = "";
+    char artist[48] = "";
+    bool playing     = false;
+};
+extern MusicState g_music;
+
 // Lay gio hien tai (epoch giay) tu m2 dong bo
 uint32_t clock_now_epoch();
 void     clock_sync(uint32_t epoch);
