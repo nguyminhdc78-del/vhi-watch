@@ -30,12 +30,11 @@ static lv_point_t g_linePts[MAX_ROUTE_PTS];
 #define ROUTE_CY 184
 
 // Menu
-static const char *MENU_ITEMS[] = { LV_SYMBOL_GPS    " Chi duong",
-                                    LV_SYMBOL_BELL   " Thong bao",
+static const char *MENU_ITEMS[] = { LV_SYMBOL_BELL   " Thong bao",
                                     LV_SYMBOL_AUDIO  " Nhac",
                                     LV_SYMBOL_IMAGE  " Doi anh nen",
                                     LV_SYMBOL_SETTINGS " Cai dat" };
-static const int   MENU_N = 5;
+static const int   MENU_N = 4;
 static int         menuSel = 0;
 static lv_obj_t   *menuBtns[MENU_N];
 
@@ -142,11 +141,10 @@ static void build_menu(lv_obj_t *scr) {
 
 static void menu_activate() {
     switch (menuSel) {
-        case 0: request_screen(SCR_NAV);    break;
-        case 1: request_screen(SCR_NOTIFY); break;
-        case 2: request_screen(SCR_MUSIC);  break;
-        case 3: request_screen(SCR_UPLOAD); break;
-        case 4: /* TODO: cai dat */         break;
+        case 0: request_screen(SCR_NOTIFY); break;
+        case 1: request_screen(SCR_MUSIC);  break;
+        case 2: request_screen(SCR_UPLOAD); break;
+        case 3: /* TODO: cai dat */         break;
     }
 }
 

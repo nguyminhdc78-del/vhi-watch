@@ -12,12 +12,8 @@ dependencies:
   cupertino_icons: ^1.0.6
   flutter_blue_plus: ^2.3.9        # BLE (ban 2.x da sua loi gradle compileSdk)
   permission_handler: ^11.3.1     # xin quyen runtime
-  geolocator: ^12.0.0             # GPS dien thoai (dan duong tu dong)
-  http: ^1.2.2                    # Google Directions API + upload anh
   image: ^4.2.0                   # resize + convert RGB565
   image_picker: ^1.1.2            # chon anh tu thu vien
-  flutter_map: ^7.0.2             # ban do that (OpenStreetMap)
-  latlong2: ^0.9.1                # toa do cho ban do
   notification_listener_service: ^1.0.0  # doc thong bao Android
 
 dev_dependencies:
