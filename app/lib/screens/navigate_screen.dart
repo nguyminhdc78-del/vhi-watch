@@ -5,6 +5,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../ble_service.dart';
 
 class NavigateScreen extends StatefulWidget {
@@ -35,7 +37,48 @@ class _NavigateScreenState extends State<NavigateScreen> {
   List<List<double>> _routeCoords = []; // toan bo polyline [ [lon,lat], ... ]
   int _idx = 0;
 
+  // Ban do tren dien thoai
+  final _mapCtrl = MapController();
+  List<LatLng> _routeLL = [];
+  LatLng? _curPos;
+
   final _ble = BleService.I;
+
+  @override
+  void initState() {
+    super.initState();
+    _initLocation();
+  }
+
+  Future<void> _initLocation() async {
+    try {
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.denied ||
+          perm == LocationPermission.deniedForever) return;
+      final p = await Geolocator.getCurrentPosition();
+      if (!mounted) return;
+      setState(() => _curPos = LatLng(p.latitude, p.longitude));
+      try { _mapCtrl.move(_curPos!, 15); } catch (_) {}
+    } catch (_) {}
+  }
+
+  // Bo dau tieng Viet (font dong ho khong co dau -> tranh o vuong)
+  String _noAccent(String s) {
+    const groups = {
+      'a': 'àáạảãâầấậẩẫăằắặẳẵ', 'e': 'èéẹẻẽêềếệểễ', 'i': 'ìíịỉĩ',
+      'o': 'òóọỏõôồốộổỗơờớợởỡ', 'u': 'ùúụủũưừứựửữ', 'y': 'ỳýỵỷỹ', 'd': 'đ',
+    };
+    var out = s;
+    groups.forEach((base, accents) {
+      for (final ch in accents.split('')) {
+        out = out.replaceAll(ch, base).replaceAll(ch.toUpperCase(), base.toUpperCase());
+      }
+    });
+    return out;
+  }
 
   @override
   void dispose() {
@@ -118,6 +161,9 @@ class _NavigateScreenState extends State<NavigateScreen> {
           .map<List<double>>(
               (c) => [(c[0] as num).toDouble(), (c[1] as num).toDouble()])
           .toList();
+      _routeLL = _routeCoords.map((c) => LatLng(c[1], c[0])).toList();
+      _curPos = LatLng(pos.latitude, pos.longitude);
+      try { _mapCtrl.move(_curPos!, 15); } catch (_) {}
       final segments = dfeats[0]['properties']['segments'] as List;
       _steps = [];
       for (final seg in segments) {
@@ -198,7 +244,14 @@ class _NavigateScreenState extends State<NavigateScreen> {
 
   void _onMove(Position pos) {
     _sendRouteLine(pos);
-    if (_idx >= _steps.length) return;
+    // cap nhat vi tri tren ban do dien thoai
+    _curPos = LatLng(pos.latitude, pos.longitude);
+    try { _mapCtrl.move(_curPos!, _mapCtrl.camera.zoom); } catch (_) {}
+
+    if (_idx >= _steps.length) {
+      if (mounted) setState(() {});
+      return;
+    }
     final st = _steps[_idx];
     final d = Geolocator.distanceBetween(
             pos.latitude, pos.longitude, st.lat, st.lng)
@@ -209,12 +262,13 @@ class _NavigateScreenState extends State<NavigateScreen> {
               _steps[i - 1].lat, _steps[i - 1].lng, _steps[i].lat, _steps[i].lng)
           .round();
     }
-    _ble.sendNav({'m': st.man, 'd': d, 'r': remain, 's': st.text, 'e': ''});
+    // bo dau truoc khi gui xuong dong ho (tranh o vuong)
+    _ble.sendNav({'m': st.man, 'd': d, 'r': remain, 's': _noAccent(st.text), 'e': ''});
     setState(() => _navStat = 'Bước ${_idx + 1}/${_steps.length} · ${d}m · ${st.text}');
     if (d < 25) {
       _idx++;
       if (_idx >= _steps.length) {
-        _ble.sendNav({'m': 9, 'd': 0, 'r': 0, 's': 'Đã đến nơi', 'e': ''});
+        _ble.sendNav({'m': 9, 'd': 0, 'r': 0, 's': 'Da den noi', 'e': ''});
         _posSub?.cancel();
       }
     }
@@ -231,6 +285,42 @@ class _NavigateScreenState extends State<NavigateScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // --- Ban do that (OpenStreetMap): xem tuyen duong + vi tri de doi chieu ---
+        Card(
+          clipBehavior: Clip.antiAlias,
+          child: SizedBox(
+            height: 300,
+            child: FlutterMap(
+              mapController: _mapCtrl,
+              options: MapOptions(
+                initialCenter: _curPos ?? const LatLng(21.0278, 105.8342),
+                initialZoom: 15,
+              ),
+              children: [
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.vhitek.vhi_watch',
+                ),
+                if (_routeLL.isNotEmpty)
+                  PolylineLayer(polylines: [
+                    Polyline(points: _routeLL, strokeWidth: 5, color: Colors.blueAccent),
+                  ]),
+                if (_curPos != null)
+                  MarkerLayer(markers: [
+                    Marker(
+                      point: _curPos!,
+                      width: 30,
+                      height: 30,
+                      child: const Icon(Icons.navigation, color: Colors.red, size: 30),
+                    ),
+                  ]),
+                RichAttributionWidget(attributions: const [
+                  TextSourceAttribution('OpenStreetMap'),
+                ]),
+              ],
+            ),
+          ),
+        ),
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -326,7 +416,7 @@ class _NavigateScreenState extends State<NavigateScreen> {
                     'm': _man,
                     'd': int.tryParse(_dist.text) ?? 0,
                     'r': int.tryParse(_remain.text) ?? 0,
-                    's': _street.text,
+                    's': _noAccent(_street.text),
                     'e': _eta.text,
                   }),
                   icon: const Icon(Icons.send),

@@ -16,6 +16,8 @@ dependencies:
   http: ^1.2.2                    # Google Directions API + upload anh
   image: ^4.2.0                   # resize + convert RGB565
   image_picker: ^1.1.2            # chon anh tu thu vien
+  flutter_map: ^7.0.2             # ban do that (OpenStreetMap)
+  latlong2: ^0.9.1                # toa do cho ban do
 
 dev_dependencies:
   flutter_lints: ^4.0.0
