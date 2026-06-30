@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
@@ -30,6 +32,7 @@ class _NavigateScreenState extends State<NavigateScreen> {
 
   StreamSubscription<Position>? _posSub;
   List<_NavStep> _steps = [];
+  List<List<double>> _routeCoords = []; // toan bo polyline [ [lon,lat], ... ]
   int _idx = 0;
 
   final _ble = BleService.I;
@@ -111,6 +114,10 @@ class _NavigateScreenState extends State<NavigateScreen> {
         return;
       }
       final coords = dfeats[0]['geometry']['coordinates'] as List; // [[lon,lat],...]
+      _routeCoords = coords
+          .map<List<double>>(
+              (c) => [(c[0] as num).toDouble(), (c[1] as num).toDouble()])
+          .toList();
       final segments = dfeats[0]['properties']['segments'] as List;
       _steps = [];
       for (final seg in segments) {
@@ -143,7 +150,54 @@ class _NavigateScreenState extends State<NavigateScreen> {
     }
   }
 
+  // Chiếu đoạn lộ trình quanh vị trí hiện tại -> toạ độ màn hình (xoay theo hướng đi) -> gửi đồng hồ
+  void _sendRouteLine(Position pos) {
+    if (_routeCoords.isEmpty || !_ble.canSendRoute) return;
+
+    // điểm gần nhất trên tuyến
+    int near = 0;
+    double best = double.infinity;
+    for (int i = 0; i < _routeCoords.length; i++) {
+      final dd = Geolocator.distanceBetween(
+          pos.latitude, pos.longitude, _routeCoords[i][1], _routeCoords[i][0]);
+      if (dd < best) { best = dd; near = i; }
+    }
+    final int start = (near - 2) < 0 ? 0 : near - 2;
+    final int endI =
+        (near + 30) >= _routeCoords.length ? _routeCoords.length - 1 : near + 30;
+
+    final double head = (pos.heading >= 0) ? pos.heading : 0; // hướng đi (độ)
+    final double hr = head * pi / 180.0;
+    final double cosH = cos(hr), sinH = sin(hr);
+    final double latRad = pos.latitude * pi / 180.0;
+
+    final List<double> xs = [], ys = [];
+    double maxAbs = 1;
+    for (int i = start; i <= endI; i++) {
+      final double dxm =
+          (_routeCoords[i][0] - pos.longitude) * 111320.0 * cos(latRad);
+      final double dym = (_routeCoords[i][1] - pos.latitude) * 110540.0;
+      final double sx = dxm * cosH - dym * sinH;      // phải-trái
+      final double sy = -(dxm * sinH + dym * cosH);   // trước (lên) = âm
+      xs.add(sx); ys.add(sy);
+      if (sx.abs() > maxAbs) maxAbs = sx.abs();
+      if (sy.abs() > maxAbs) maxAbs = sy.abs();
+    }
+    final double scale = 95.0 / maxAbs;
+
+    final bytes = <int>[];
+    bytes.add(xs.length);
+    for (int i = 0; i < xs.length; i++) {
+      int x = (xs[i] * scale).round().clamp(-120, 120);
+      int y = (ys[i] * scale).round().clamp(-120, 120);
+      bytes.add(x & 0xff);
+      bytes.add(y & 0xff);
+    }
+    _ble.sendRoute(Uint8List.fromList(bytes));
+  }
+
   void _onMove(Position pos) {
+    _sendRouteLine(pos);
     if (_idx >= _steps.length) return;
     final st = _steps[_idx];
     final d = Geolocator.distanceBetween(

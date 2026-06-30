@@ -39,6 +39,7 @@
 #define BLE_CHR_TIME_UUID   "6e400003-b5a3-f393-e0a9-e50e24dcca9e" // phone -> watch: dong bo thoi gian (epoch)
 #define BLE_CHR_STATUS_UUID "6e400004-b5a3-f393-e0a9-e50e24dcca9e" // watch -> phone: trang thai (notify)
 #define BLE_CHR_WP_UUID     "6e400005-b5a3-f393-e0a9-e50e24dcca9e" // phone -> watch: anh nen RGB565 (stream tung chunk)
+#define BLE_CHR_ROUTE_UUID  "6e400006-b5a3-f393-e0a9-e50e24dcca9e" // phone -> watch: duong line lo trinh (int8 x,y pairs)
 
 // ---------------- WiFi / Web upload anh ----------------
 // Che do Access Point: dien thoai ket noi truc tiep vao wifi cua dong ho de upload anh

@@ -49,6 +49,12 @@ extern SysState   g_sys;
 // Co bao: vua nhan xong anh nen moi qua BLE -> UI nap lai
 extern volatile bool g_wpUpdated;
 
+// Duong line lo trinh nhan tu app (toa do int8 lech so voi tam, da xoay theo huong di)
+#define MAX_ROUTE_PTS 48
+extern volatile int  g_routeCount;
+extern int8_t        g_routeXY[MAX_ROUTE_PTS * 2];
+extern volatile bool g_routeDirty;
+
 // Lay gio hien tai (epoch giay) tu m2 dong bo
 uint32_t clock_now_epoch();
 void     clock_sync(uint32_t epoch);

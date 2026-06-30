@@ -18,10 +18,11 @@ class BleService extends ChangeNotifier {
   static const _navUuid = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
   static const _timeUuid = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
   static const _statUuid = "6e400004-b5a3-f393-e0a9-e50e24dcca9e";
-  static const _wpUuid   = "6e400005-b5a3-f393-e0a9-e50e24dcca9e";
+  static const _wpUuid    = "6e400005-b5a3-f393-e0a9-e50e24dcca9e";
+  static const _routeUuid = "6e400006-b5a3-f393-e0a9-e50e24dcca9e";
 
   BluetoothDevice? _device;
-  BluetoothCharacteristic? _nav, _time, _stat, _wp;
+  BluetoothCharacteristic? _nav, _time, _stat, _wp, _route;
   StreamSubscription<BluetoothConnectionState>? _connSub;
   StreamSubscription<List<ScanResult>>? _scanSub;
   StreamSubscription<List<int>>? _statSub;
@@ -128,6 +129,7 @@ class BleService extends ChangeNotifier {
             else if (u == _timeUuid) _time = c;
             else if (u == _statUuid) _stat = c;
             else if (u == _wpUuid) _wp = c;
+            else if (u == _routeUuid) _route = c;
           }
         }
       }
@@ -161,12 +163,21 @@ class BleService extends ChangeNotifier {
 
   void _onDisconnect() {
     connected = false;
-    _nav = _time = _stat = _wp = null;
+    _nav = _time = _stat = _wp = _route = null;
     status = 'Mất kết nối';
     notifyListeners();
   }
 
   bool get canSendWallpaper => _wp != null;
+  bool get canSendRoute => _route != null;
+
+  // Gui duong line lo trinh (byte[0]=so diem, sau do la cac cap x,y int8)
+  Future<void> sendRoute(Uint8List bytes) async {
+    if (_route == null) return;
+    try {
+      await _route!.write(bytes, withoutResponse: true);
+    } catch (_) {}
+  }
 
   // Gui anh nen RGB565 (240x240 = 115200 byte) xuong dong ho theo tung chunk
   Future<void> sendWallpaper(Uint8List data,

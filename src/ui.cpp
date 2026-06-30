@@ -21,6 +21,11 @@ static Screen      g_cur     = SCR_WATCH;
 // Con tro toi cac label can cap nhat
 static lv_obj_t *lblTime = nullptr, *lblDate = nullptr, *lblStat = nullptr;
 static lv_obj_t *navArrow = nullptr, *navDist = nullptr, *navStreet = nullptr, *navEta = nullptr;
+static lv_obj_t *navLine = nullptr, *navDot = nullptr;
+static lv_point_t g_linePts[MAX_ROUTE_PTS];
+// Tam vung ve lo trinh (cham vi tri ban) - hoi thap de duong phia truoc huong len
+#define ROUTE_CX 120
+#define ROUTE_CY 184
 
 // Menu
 static const char *MENU_ITEMS[] = { LV_SYMBOL_GPS " Chi duong",
@@ -145,32 +150,68 @@ static void menu_activate() {
 //  NAVIGATION
 // ============================================================
 static void build_nav(lv_obj_t *scr) {
+    g_routeCount = 0;   // bo lo trinh cu
+
+    // --- Duong line lo trinh (nen) ---
+    navLine = lv_line_create(scr);
+    lv_obj_set_pos(navLine, 0, 0);
+    lv_obj_set_size(navLine, SCREEN_W, SCREEN_H);
+    lv_obj_set_style_line_width(navLine, 6, 0);
+    lv_obj_set_style_line_color(navLine, lv_color_hex(0x2E7DFF), 0);
+    lv_obj_set_style_line_rounded(navLine, true, 0);
+
+    // --- Cham vi tri hien tai ---
+    navDot = lv_obj_create(scr);
+    lv_obj_set_size(navDot, 16, 16);
+    lv_obj_set_style_radius(navDot, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(navDot, lv_color_hex(0xFFCC00), 0);
+    lv_obj_set_style_border_width(navDot, 2, 0);
+    lv_obj_set_style_border_color(navDot, lv_color_white(), 0);
+    lv_obj_clear_flag(navDot, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_pos(navDot, ROUTE_CX - 8, ROUTE_CY - 8);
+
+    // --- Mui ten huong re (tren cung) ---
     navArrow = lv_label_create(scr);
     lv_obj_set_style_text_font(navArrow, &lv_font_montserrat_48, 0);
     lv_obj_set_style_text_color(navArrow, lv_color_hex(0x33CCFF), 0);
     lv_label_set_text(navArrow, LV_SYMBOL_GPS);
-    lv_obj_align(navArrow, LV_ALIGN_TOP_MID, 0, 30);
+    lv_obj_align(navArrow, LV_ALIGN_TOP_MID, 0, 2);
 
     navDist = lv_label_create(scr);
     lv_obj_set_style_text_font(navDist, &lv_font_montserrat_28, 0);
     lv_obj_set_style_text_color(navDist, lv_color_white(), 0);
     lv_label_set_text(navDist, "--");
-    lv_obj_align(navDist, LV_ALIGN_CENTER, 0, -5);
+    lv_obj_align(navDist, LV_ALIGN_TOP_MID, 0, 52);
 
+    // --- Ten duong (duoi cung, co nen mo de de doc) ---
     navStreet = lv_label_create(scr);
     lv_obj_set_style_text_font(navStreet, &lv_font_montserrat_16, 0);
-    lv_obj_set_style_text_color(navStreet, lv_color_hex(0xCCCCCC), 0);
+    lv_obj_set_style_text_color(navStreet, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(navStreet, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(navStreet, LV_OPA_60, 0);
+    lv_obj_set_style_pad_all(navStreet, 4, 0);
     lv_label_set_long_mode(navStreet, LV_LABEL_LONG_SCROLL_CIRCULAR);
-    lv_obj_set_width(navStreet, 200);
+    lv_obj_set_width(navStreet, 224);
     lv_obj_set_style_text_align(navStreet, LV_TEXT_ALIGN_CENTER, 0);
-    lv_label_set_text(navStreet, "Cho dien thoai ket noi...");
-    lv_obj_align(navStreet, LV_ALIGN_CENTER, 0, 40);
+    lv_label_set_text(navStreet, "Cho dinh tuyen...");
+    lv_obj_align(navStreet, LV_ALIGN_BOTTOM_MID, 0, -2);
 
-    navEta = lv_label_create(scr);
-    lv_obj_set_style_text_font(navEta, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(navEta, lv_color_hex(0x888888), 0);
-    lv_label_set_text(navEta, "");
-    lv_obj_align(navEta, LV_ALIGN_BOTTOM_MID, 0, -10);
+    navEta = nullptr;
+}
+
+// Ve lai duong line tu du lieu nhan qua BLE
+static void route_refresh() {
+    if (g_cur != SCR_NAV || !navLine) return;
+    if (!g_routeDirty) return;
+    g_routeDirty = false;
+    int n = g_routeCount;
+    if (n > MAX_ROUTE_PTS) n = MAX_ROUTE_PTS;
+    if (n < 2) { lv_line_set_points(navLine, g_linePts, 0); return; }
+    for (int i = 0; i < n; i++) {
+        g_linePts[i].x = ROUTE_CX + g_routeXY[i * 2];
+        g_linePts[i].y = ROUTE_CY + g_routeXY[i * 2 + 1];
+    }
+    lv_line_set_points(navLine, g_linePts, n);
 }
 
 static void update_nav() {
@@ -179,7 +220,6 @@ static void update_nav() {
         lv_label_set_text(navArrow, LV_SYMBOL_GPS);
         lv_label_set_text(navDist, "--");
         lv_label_set_text(navStreet, "Chua co lo trinh");
-        lv_label_set_text(navEta, "");
         return;
     }
     lv_label_set_text(navArrow, maneuver_symbol(g_nav.maneuver));
@@ -190,11 +230,6 @@ static void update_nav() {
     lv_label_set_text(navDist, b);
 
     lv_label_set_text(navStreet, g_nav.street[0] ? g_nav.street : "");
-
-    char e[40];
-    snprintf(e, sizeof(e), "ETA %s  -  con %.1f km",
-             g_nav.eta[0] ? g_nav.eta : "--", g_nav.remain_m / 1000.0);
-    lv_label_set_text(navEta, e);
 }
 
 // ============================================================
@@ -279,6 +314,7 @@ static void show_screen(Screen s) {
     // reset con tro label
     lblTime = lblDate = lblStat = nullptr;
     navArrow = navDist = navStreet = navEta = nullptr;
+    navLine = navDot = nullptr;
 
     g_scr = make_root();
     g_cur = s;
@@ -352,4 +388,5 @@ void ui_tick() {
     }
 
     update_nav();
+    route_refresh();
 }

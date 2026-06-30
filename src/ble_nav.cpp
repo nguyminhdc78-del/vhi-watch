@@ -95,6 +95,26 @@ class WpCB : public NimBLECharacteristicCallbacks {
     }
 };
 
+// Nhan duong line lo trinh: byte[0] = so diem, sau do la cac cap (x,y) int8
+class RouteCB : public NimBLECharacteristicCallbacks {
+    void onWrite(NimBLECharacteristic *c) override {
+        std::string v = c->getValue();
+        const uint8_t *d = (const uint8_t *)v.data();
+        size_t len = v.size();
+        if (len < 1) return;
+        int n = d[0];
+        int avail = (int)(len - 1) / 2;
+        if (n > avail) n = avail;
+        if (n > MAX_ROUTE_PTS) n = MAX_ROUTE_PTS;
+        for (int i = 0; i < n; i++) {
+            g_routeXY[i * 2]     = (int8_t)d[1 + i * 2];
+            g_routeXY[i * 2 + 1] = (int8_t)d[1 + i * 2 + 1];
+        }
+        g_routeCount = n;
+        g_routeDirty = true;
+    }
+};
+
 void ble_init() {
     NimBLEDevice::init(BLE_DEVICE_NAME);
     NimBLEDevice::setPower(ESP_PWR_LVL_P9);
@@ -119,6 +139,11 @@ void ble_init() {
         svc->createCharacteristic(BLE_CHR_WP_UUID,
                                   NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
     chrWp->setCallbacks(new WpCB());
+
+    NimBLECharacteristic *chrRoute =
+        svc->createCharacteristic(BLE_CHR_ROUTE_UUID,
+                                  NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
+    chrRoute->setCallbacks(new RouteCB());
 
     svc->start();
 
