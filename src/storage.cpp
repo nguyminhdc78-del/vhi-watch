@@ -32,7 +32,7 @@ lv_img_dsc_t* storage_load_image(const char *path) {
     if (f.size() < WALLPAPER_BYTES) { f.close(); return nullptr; }
 
     s_buf = (uint8_t *)malloc(WALLPAPER_BYTES);
-    if (!s_buf) { Serial.println("[FS] Het RAM cho anh"); f.close(); return nullptr; }
+    if (!s_buf) { f.close(); return nullptr; }
     f.read(s_buf, WALLPAPER_BYTES);
     f.close();
 

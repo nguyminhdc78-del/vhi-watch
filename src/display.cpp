@@ -1,5 +1,6 @@
 #include "display.h"
 #include "config.h"
+#include <LittleFS.h>
 
 #define LGFX_USE_V1
 #include <LovyanGFX.hpp>
@@ -66,8 +67,13 @@ static LGFX lcd;
 static lv_disp_draw_buf_t draw_buf;
 static lv_color_t buf1[SCREEN_W * LVGL_BUF_LINES];
 
+// Khi ve anh truc tiep (QR), bo qua flush cua LVGL de khong de len
+static volatile bool s_rawMode = false;
+void display_set_raw(bool on) { s_rawMode = on; }
+
 // LVGL goi de day pixel ra man hinh
 static void disp_flush(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_p) {
+    if (s_rawMode) { lv_disp_flush_ready(drv); return; }  // dang ve raw -> bo qua
     uint32_t w = area->x2 - area->x1 + 1;
     uint32_t h = area->y2 - area->y1 + 1;
 
@@ -85,6 +91,64 @@ void display_set_backlight(uint8_t level) {
 void display_sleep() {
     lcd.setBrightness(0);   // tat den nen
     lcd.sleep();            // dua ST7789 vao che do ngu (tiet kiem dong)
+}
+
+void display_wake() {
+    lcd.wakeup();                          // danh thuc panel ST7789
+    display_set_backlight(BACKLIGHT_DEFAULT);
+}
+
+// Ve 1 anh RGB565 240x240 tu LittleFS THANG ra man (it RAM: doc tung dong)
+bool display_draw_image_file(const char *path) {
+    File f = LittleFS.open(path, "r");
+    if (!f) return false;
+    if (f.size() < (size_t)(SCREEN_W * SCREEN_H * 2)) { f.close(); return false; }
+    static uint16_t line[SCREEN_W];
+    lcd.startWrite();
+    for (int y = 0; y < SCREEN_H; y++) {
+        f.read((uint8_t *)line, SCREEN_W * 2);
+        lcd.pushImage(0, y, SCREEN_W, 1, (lgfx::rgb565_t *)line);
+    }
+    lcd.endWrite();
+    f.close();
+    return true;
+}
+
+// Ve lai 1 dai ngang cua anh (tu dong y0, cao h) - dung de xoa chu cu ma giu anh nen
+bool display_draw_image_band(const char *path, int y0, int h) {
+    File f = LittleFS.open(path, "r");
+    if (!f) return false;
+    if (f.size() < (size_t)(SCREEN_W * SCREEN_H * 2)) { f.close(); return false; }
+    static uint16_t line[SCREEN_W];
+    f.seek((size_t)y0 * SCREEN_W * 2);
+    lcd.startWrite();
+    for (int y = y0; y < y0 + h && y < SCREEN_H; y++) {
+        f.read((uint8_t *)line, SCREEN_W * 2);
+        lcd.pushImage(0, y, SCREEN_W, 1, (lgfx::rgb565_t *)line);
+    }
+    lcd.endWrite();
+    f.close();
+    return true;
+}
+
+void display_fill(uint16_t color) { lcd.fillScreen(color); }
+
+void display_text(int x, int y, const char *s, uint16_t color, uint16_t bg) {
+    lcd.setTextColor(color, bg);
+    lcd.setTextSize(2);
+    lcd.drawString(s, x, y);
+}
+
+void display_fill_rect(int x, int y, int w, int h, uint16_t color) {
+    lcd.fillRect(x, y, w, h, color);
+}
+
+// Ve chu can giua theo chieu ngang (nen trong suot)
+void display_text_center(int cx, int yTop, const char *s, uint16_t color, int size) {
+    lcd.setTextSize(size);
+    lcd.setTextColor(color);
+    int w = lcd.textWidth(s);
+    lcd.drawString(s, cx - w / 2, yTop);
 }
 
 void display_init() {

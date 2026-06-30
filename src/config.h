@@ -62,8 +62,8 @@
 #define WALLPAPER_BYTES     (SCREEN_W * SCREEN_H * 2)
 
 // ---------------- Deep sleep ----------------
-// Khong bam nut trong bao lau (ms) thi ngu sau (chi khi dang o mat dong ho)
-#define SLEEP_TIMEOUT_MS    30000
+// Khong bam nut trong bao lau (ms) thi tat man hinh (chi khi dang o mat dong ho)
+#define SLEEP_TIMEOUT_MS    60000
 
 // ---------------- LVGL ----------------
 #define LVGL_TICK_MS        5

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'theme.dart';
 import 'ble_service.dart';
 import 'smartwatch_service.dart';
-import 'camera_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/wallpaper_screen.dart';
 
@@ -15,7 +14,6 @@ class VhiApp extends StatelessWidget {
     return MaterialApp(
       title: 'VHI Watch',
       debugShowCheckedModeBanner: false,
-      navigatorKey: appNavKey,   // de mo khung chup tu lenh BLE
       theme: buildTheme(),
       home: const RootPage(),
     );
@@ -35,7 +33,8 @@ class _RootPageState extends State<RootPage> {
   @override
   void initState() {
     super.initState();
-    SmartwatchService.I.start(); // bat dau lang nghe thong bao
+    SmartwatchService.I.start();      // bat dau lang nghe thong bao
+    BleService.I.autoConnectStart();  // tu dong ket noi dong ho khi mo app
   }
 
   @override

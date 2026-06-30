@@ -5,6 +5,7 @@
 #include "web_upload.h"
 #include "ble_nav.h"
 #include "hid_remote.h"
+#include "display.h"
 #include <time.h>
 
 // ============================================================
@@ -26,7 +27,6 @@ static lv_obj_t *navLine = nullptr, *navDot = nullptr;
 static lv_obj_t *lblNApp = nullptr, *lblNTitle = nullptr, *lblNText = nullptr;
 static lv_obj_t *lblMTitle = nullptr, *lblMArtist = nullptr, *lblMState = nullptr;
 static lv_obj_t *lblRemote = nullptr;
-static lv_obj_t *qrObj = nullptr, *qrLabel = nullptr;
 static int       qrIdx = 0;
 static lv_point_t g_linePts[MAX_ROUTE_PTS];
 // Tam vung ve lo trinh (cham vi tri ban) - hoi thap de duong phia truoc huong len
@@ -71,44 +71,57 @@ static const char* maneuver_symbol(NavManeuver m) {
 // ============================================================
 //  WATCHFACE
 // ============================================================
-static void build_watchface(lv_obj_t *scr) {
-    // Anh nen (neu co)
-    lv_img_dsc_t *wp = storage_load_wallpaper();
-    if (wp) {
-        lv_obj_t *bg = lv_img_create(scr);
-        lv_img_set_src(bg, wp);
-        lv_obj_center(bg);
+// Watchface ve TRUC TIEP (anh nen + gio), nhe RAM
+static int wfLastMin = -2, wfLastStat = -1;
+static bool wfHasWp = false;   // co anh nen hay khong
+
+static uint16_t ui_color565() {
+    return ((g_uiR >> 3) << 11) | ((g_uiG >> 2) << 5) | (g_uiB >> 3);
+}
+
+// Xoa 1 dai ngang: ve lai anh nen neu co, khong thi to den
+static void wf_clear_band(int y0, int h) {
+    if (!wfHasWp || !display_draw_image_band(WALLPAPER_PATH, y0, h))
+        display_fill_rect(0, y0, SCREEN_W, h, 0x0000);
+}
+
+static void draw_wf_status() {
+    wf_clear_band(0, 22);
+    char s[40];
+    snprintf(s, sizeof(s), "%s  %d%%",
+             g_sys.bleConnected ? "BLE" : "Cho ket noi", g_sys.battPercent);
+    display_text_center(SCREEN_W / 2, 4, s, 0x5E8C, 1);
+}
+
+static void draw_wf_time() {
+    char tb[8] = "--:--", db[24] = "";
+    uint32_t ep = clock_now_epoch();
+    if (ep) {
+        time_t t = (time_t)(ep + 7 * 3600);   // GMT+7
+        struct tm tm; gmtime_r(&t, &tm);
+        snprintf(tb, sizeof(tb), "%02d:%02d", tm.tm_hour, tm.tm_min);
+        static const char *wd[] = {"CN", "T2", "T3", "T4", "T5", "T6", "T7"};
+        snprintf(db, sizeof(db), "%s %02d/%02d", wd[tm.tm_wday], tm.tm_mday, tm.tm_mon + 1);
     }
+    wf_clear_band(86, 82);   // xoa vung gio (giu anh nen)
+    display_text_center(SCREEN_W / 2, 94, tb, ui_color565(), 6);
+    display_text_center(SCREEN_W / 2, 144, db, 0xAD55, 2);
+}
 
-    lv_color_t uiCol = lv_color_make(g_uiR, g_uiG, g_uiB);  // mau chu do app chon
+static void draw_wf_full() {
+    wfHasWp = display_draw_image_file(WALLPAPER_PATH);
+    if (!wfHasWp) display_fill(0x0000);
+    draw_wf_status();
+    draw_wf_time();
+    if (!wfHasWp)
+        display_text_center(SCREEN_W / 2, 224, "Nhan B = Menu", 0x8410, 1);
+}
 
-    // Gio (font to)
-    lblTime = lv_label_create(scr);
-    lv_obj_set_style_text_font(lblTime, &lv_font_montserrat_48, 0);
-    lv_obj_set_style_text_color(lblTime, uiCol, 0);
-    lv_label_set_text(lblTime, "--:--");
-    lv_obj_align(lblTime, LV_ALIGN_CENTER, 0, -10);
-
-    // Ngay
-    lblDate = lv_label_create(scr);
-    lv_obj_set_style_text_font(lblDate, &lv_font_montserrat_16, 0);
-    lv_obj_set_style_text_color(lblDate, uiCol, 0);
-    lv_label_set_text(lblDate, "");
-    lv_obj_align(lblDate, LV_ALIGN_CENTER, 0, 30);
-
-    // Trang thai (BLE + pin) o tren
-    lblStat = lv_label_create(scr);
-    lv_obj_set_style_text_font(lblStat, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(lblStat, lv_color_hex(0x66CC66), 0);
-    lv_label_set_text(lblStat, "");
-    lv_obj_align(lblStat, LV_ALIGN_TOP_MID, 0, 8);
-
-    // Goi y thao tac
-    lv_obj_t *hint = lv_label_create(scr);
-    lv_obj_set_style_text_font(hint, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(hint, lv_color_hex(0x555555), 0);
-    lv_label_set_text(hint, "Nhan B = Menu");
-    lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -8);
+static void build_watchface(lv_obj_t *scr) {
+    (void)scr;
+    display_set_raw(true);            // ve thang ra man (nhe RAM, ho tro anh nen)
+    wfLastMin = -2; wfLastStat = -1;
+    draw_wf_full();
 }
 
 // ============================================================
@@ -376,13 +389,23 @@ static void build_remote(lv_obj_t *scr) {
 }
 
 static void update_remote() {
-    if (!lblRemote || g_cur != SCR_REMOTE) return;   // chi cho Remote PC (HID)
-    if (hid_connected()) {
-        lv_obj_set_style_text_color(lblRemote, lv_color_hex(0x66CC66), 0);
-        lv_label_set_text(lblRemote, "Da ket noi may tinh!\nBam A/B de lat slide");
-    } else {
-        lv_obj_set_style_text_color(lblRemote, lv_color_hex(0xE5A23B), 0);
-        lv_label_set_text(lblRemote, "May tinh: vao Bluetooth\nghep voi \"VHI-Remote\"");
+    if (!lblRemote) return;
+    if (g_cur == SCR_REMOTE) {
+        if (hid_connected()) {
+            lv_obj_set_style_text_color(lblRemote, lv_color_hex(0x66CC66), 0);
+            lv_label_set_text(lblRemote, "Da ket noi may tinh!\nBam A/B de lat slide");
+        } else {
+            lv_obj_set_style_text_color(lblRemote, lv_color_hex(0xE5A23B), 0);
+            lv_label_set_text(lblRemote, "May tinh: vao Bluetooth\nghep voi \"VHI-Remote\"");
+        }
+    } else if (g_cur == SCR_CAMERA) {
+        if (hid_connected()) {
+            lv_obj_set_style_text_color(lblRemote, lv_color_hex(0x66CC66), 0);
+            lv_label_set_text(lblRemote, "San sang! Mo Camera dien thoai\nBam A/B de chup");
+        } else {
+            lv_obj_set_style_text_color(lblRemote, lv_color_hex(0xE5A23B), 0);
+            lv_label_set_text(lblRemote, "Dang ket noi... neu lau,\nghep BT \"VHI-Remote\"");
+        }
     }
 }
 
@@ -390,7 +413,12 @@ static void update_remote() {
 //  CHUP HINH (HID gui phim Volume Up - kich hoat Camera)
 // ============================================================
 static void build_camera(lv_obj_t *scr) {
-    ble_send_media("camera_open");   // bao app dien thoai mo khung chup
+    // 1) Bao app dien thoai mo APP MAY ANH GOC, 2) chuyen dong ho sang che do
+    //    HID (ban phim BT) de nut bam = phim Volume = chup hinh tren camera goc.
+    bool wasConnected = g_sys.bleConnected;
+    if (wasConnected) { ble_send_media("camera_open"); delay(700); }  // doi app mo camera
+    ble_stop();      // tat BLE thuong (C3 chi chay 1 cau hinh BLE 1 luc)
+    hid_start();     // bat HID -> dien thoai nhan dong ho la remote chup hinh
 
     lv_obj_t *t = lv_label_create(scr);
     lv_obj_set_style_text_font(t, &lv_font_montserrat_20, 0);
@@ -411,7 +439,8 @@ static void build_camera(lv_obj_t *scr) {
     lv_label_set_long_mode(lblRemote, LV_LABEL_LONG_WRAP);
     lv_obj_set_style_text_align(lblRemote, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_text(lblRemote,
-        g_sys.bleConnected ? "Camera dang mo tren dien thoai" : "Hay ket noi dien thoai truoc!");
+        wasConnected ? "Camera dien thoai dang mo.\nDua may len chup!"
+                     : "Hay ket noi dien thoai truoc!");
     lv_obj_align(lblRemote, LV_ALIGN_CENTER, 0, 36);
 
     lv_obj_t *hint = lv_label_create(scr);
@@ -424,44 +453,24 @@ static void build_camera(lv_obj_t *scr) {
 // ============================================================
 //  THE TEN THONG MINH (QR code)
 // ============================================================
-static void build_qr(lv_obj_t *scr) {
+// Ve man QR THANG ra man hinh (it RAM, on dinh hon lv_img full-screen)
+static void qr_draw() {
     char path[20];
     snprintf(path, sizeof(path), QR_IMG_PATH_FMT, qrIdx);
-    lv_img_dsc_t *img = storage_load_image(path);
-
-    if (img) {                                  // co anh QR -> hien full man
-        qrObj = lv_img_create(scr);
-        lv_img_set_src(qrObj, img);
-        lv_obj_center(qrObj);
-    } else {                                     // chua co
-        lv_obj_t *t = lv_label_create(scr);
-        lv_obj_set_style_text_font(t, &lv_font_montserrat_20, 0);
-        lv_obj_set_style_text_color(t, lv_color_white(), 0);
-        lv_obj_set_style_text_align(t, LV_TEXT_ALIGN_CENTER, 0);
-        lv_label_set_text(t, "Chua co QR\n\nUpload tu app\n(tab QR)");
-        lv_obj_center(t);
+    if (!display_draw_image_file(path)) {       // chua co anh
+        display_fill(0x0000);
+        display_text(54, 100, "Chua co QR", 0xFFFF, 0x0000);
+        display_text(28, 128, "Upload tu app", 0x8410, 0x0000);
     }
-
-    // nhan o (goc tren, nen mo cho de doc)
-    qrLabel = lv_label_create(scr);
-    lv_obj_set_style_text_font(qrLabel, &lv_font_montserrat_16, 0);
-    lv_obj_set_style_text_color(qrLabel, lv_color_white(), 0);
-    lv_obj_set_style_bg_color(qrLabel, lv_color_black(), 0);
-    lv_obj_set_style_bg_opa(qrLabel, LV_OPA_50, 0);
-    lv_obj_set_style_pad_all(qrLabel, 3, 0);
-    char nm[12];
+    char nm[16];
     snprintf(nm, sizeof(nm), "QR %d/%d", qrIdx + 1, QR_COUNT);
-    lv_label_set_text(qrLabel, nm);
-    lv_obj_align(qrLabel, LV_ALIGN_TOP_LEFT, 2, 2);
+    display_text(3, 2, nm, 0xFFFF, 0x0000);                 // nhan o (goc tren-trai)
+    display_text(3, 222, "A doi C thoat", 0xFFFF, 0x0000);  // huong dan (goc duoi)
+}
 
-    lv_obj_t *hint = lv_label_create(scr);
-    lv_obj_set_style_text_font(hint, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(hint, lv_color_white(), 0);
-    lv_obj_set_style_bg_color(hint, lv_color_black(), 0);
-    lv_obj_set_style_bg_opa(hint, LV_OPA_50, 0);
-    lv_obj_set_style_pad_all(hint, 3, 0);
-    lv_label_set_text(hint, "A: doi  C: thoat");
-    lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -2);
+static void build_qr(lv_obj_t *scr) {
+    display_set_raw(true);   // ve thang ra man, LVGL khong de len
+    qr_draw();
 }
 
 // ============================================================
@@ -551,13 +560,14 @@ static void key_handler(lv_event_t *e) {
             break;
 
         case SCR_CAMERA:
-            if (key == LV_KEY_DOWN || key == LV_KEY_ENTER) ble_send_media("shoot");      // A/B: chup
-            else if (key == LV_KEY_ESC) { ble_send_media("camera_close"); request_screen(SCR_MENU); } // C: thoat
+            // A/B: gui phim Volume (HID) -> camera goc tren dien thoai chup hinh
+            if (key == LV_KEY_DOWN || key == LV_KEY_ENTER) hid_send_consumer(CC_VOLUME_UP);
+            else if (key == LV_KEY_ESC) request_screen(SCR_MENU);   // C: thoat (show_screen tu tat HID, bat lai BLE)
             break;
 
         case SCR_QR:
             if (key == LV_KEY_DOWN || key == LV_KEY_UP || key == LV_KEY_ENTER) {
-                qrIdx = (qrIdx + 1) % QR_COUNT; request_screen(SCR_QR);  // A/B: doi o QR
+                qrIdx = (qrIdx + 1) % QR_COUNT; qr_draw();   // A/B: doi o QR (ve lai truc tiep)
             } else if (key == LV_KEY_ESC) request_screen(SCR_MENU);      // C: thoat
             break;
     }
@@ -569,9 +579,8 @@ static void key_handler(lv_event_t *e) {
 static void show_screen(Screen s) {
     // doc don dep man hinh cu
     lv_obj_t *old = g_scr;
-    if (g_cur == SCR_WATCH) storage_free_wallpaper();   // giai phong 115KB
-    if (g_cur == SCR_QR)    storage_free_image();        // giai phong anh QR
-    if (g_cur == SCR_REMOTE) { hid_stop(); ble_init(); } // tat HID, bat lai BLE thuong (chi Remote PC)
+    if (g_cur == SCR_WATCH || g_cur == SCR_QR) display_set_raw(false);  // het man ve-raw
+    if (g_cur == SCR_REMOTE || g_cur == SCR_CAMERA) { hid_stop(); ble_init(); } // tat HID, bat lai BLE thuong
 
     // reset con tro label
     lblTime = lblDate = lblStat = nullptr;
@@ -580,7 +589,6 @@ static void show_screen(Screen s) {
     lblNApp = lblNTitle = lblNText = nullptr;
     lblMTitle = lblMArtist = lblMState = nullptr;
     lblRemote = nullptr;
-    qrObj = qrLabel = nullptr;
 
     g_scr = make_root();
     g_cur = s;
@@ -644,37 +652,19 @@ void ui_tick() {
     // Co thong bao moi -> tu mo man Thong bao (khi dang o man dong ho)
     if (g_notify.hasNew && g_cur == SCR_WATCH) request_screen(SCR_NOTIFY);
 
-    // Doi mau chu (tu app) -> ap dung ngay neu dang o man dong ho
+    // Doi mau chu (tu app) -> ve lai gio ngay neu dang o mat dong ho
     if (g_colorChanged) {
         g_colorChanged = false;
-        if (g_cur == SCR_WATCH && lblTime) {
-            lv_color_t col = lv_color_make(g_uiR, g_uiG, g_uiB);
-            lv_obj_set_style_text_color(lblTime, col, 0);
-            if (lblDate) lv_obj_set_style_text_color(lblDate, col, 0);
-        }
+        if (g_cur == SCR_WATCH) draw_wf_time();
     }
 
-    // Cap nhat dong ho
-    if (g_cur == SCR_WATCH && lblTime) {
+    // Cap nhat mat dong ho (ve lai khi doi phut hoac doi trang thai)
+    if (g_cur == SCR_WATCH) {
         uint32_t ep = clock_now_epoch();
-        if (ep) {
-            time_t t = (time_t)ep;
-            struct tm tm; gmtime_r(&t, &tm);
-            // GMT+7 (Viet Nam) - cong 7 gio
-            ep += 7 * 3600; t = (time_t)ep; gmtime_r(&t, &tm);
-            char b[8];  snprintf(b, sizeof(b), "%02d:%02d", tm.tm_hour, tm.tm_min);
-            lv_label_set_text(lblTime, b);
-            static const char *wd[] = {"CN","T2","T3","T4","T5","T6","T7"};
-            char d[24]; snprintf(d, sizeof(d), "%s %02d/%02d", wd[tm.tm_wday], tm.tm_mday, tm.tm_mon + 1);
-            lv_label_set_text(lblDate, d);
-        }
-        if (lblStat) {
-            char s[40];
-            snprintf(s, sizeof(s), "%s  %d%%",
-                     g_sys.bleConnected ? LV_SYMBOL_BLUETOOTH " BLE" : "Cho ket noi",
-                     g_sys.battPercent);
-            lv_label_set_text(lblStat, s);
-        }
+        int curMin = ep ? (int)((ep + 7 * 3600) / 60) : -1;
+        if (curMin != wfLastMin) { wfLastMin = curMin; draw_wf_time(); }
+        int st = (g_sys.bleConnected ? 1000 : 0) + g_sys.battPercent;
+        if (st != wfLastStat) { wfLastStat = st; draw_wf_status(); }
     }
 
     update_nav();
@@ -682,9 +672,9 @@ void ui_tick() {
     update_notify();
     update_music();
     update_remote();
-    // Vua nhan xong 1 anh QR -> neu dang xem man QR thi nap lai
+    // Vua nhan xong 1 anh QR -> neu dang xem man QR thi ve lai
     if (g_qrImgUpdated) {
         g_qrImgUpdated = false;
-        if (g_cur == SCR_QR) request_screen(SCR_QR);
+        if (g_cur == SCR_QR) qr_draw();
     }
 }

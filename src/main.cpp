@@ -17,23 +17,10 @@
 #include "app_state.h"
 #include "esp_sleep.h"
 #include "driver/gpio.h"
+#include <LittleFS.h>
 
 static uint32_t lastLvgl = 0, lastUi = 0, lastStatus = 0;
-
-// Vao deep sleep: tat man hinh, ngu, thuc khi nhan nut A(GPIO0) hoac B(GPIO1)
-// (Chip khoi dong lai khi thuc; gio van giu nho dong ho RTC)
-static void enter_deep_sleep() {
-    Serial.println("[SLEEP] Idle 30s -> deep sleep");
-    Serial.flush();
-    display_sleep();
-    delay(50);
-    gpio_set_pull_mode((gpio_num_t)PIN_BTN_A, GPIO_PULLUP_ONLY);
-    gpio_set_pull_mode((gpio_num_t)PIN_BTN_B, GPIO_PULLUP_ONLY);
-    esp_deep_sleep_enable_gpio_wakeup(
-        (1ULL << PIN_BTN_A) | (1ULL << PIN_BTN_B),
-        ESP_GPIO_WAKEUP_GPIO_LOW);   // nhan nut keo xuong LOW -> thuc
-    esp_deep_sleep_start();
-}
+static bool s_screenOff = false;   // man hinh dang tat de tiet kiem pin
 
 void setup() {
     Serial.begin(115200);
@@ -58,6 +45,21 @@ void loop() {
     // 1) Quet nut nhan
     buttons_task();
 
+    // 1b) Tu tat man hinh khi idle (tiet kiem pin) - KHONG reset chip, GIU Bluetooth.
+    //     Bam nut bat cu nut nao -> sang lai ngay (phim danh thuc bi nuot, khong kich hoat menu).
+    if (s_screenOff) {
+        if (now - g_lastInputMs < 150) {   // vua co nut/thong bao -> bat man hinh
+            display_wake();
+            buttons_flush();               // nuot phim vua danh thuc
+            ui_reload_wallpaper();         // ve lai mat dong ho cho chac
+            s_screenOff = false;
+        }
+    } else if (ui_can_sleep() && (now - g_lastInputMs > SLEEP_TIMEOUT_MS)) {
+        display_sleep();                   // tat den nen + ngu panel
+        buttons_flush();
+        s_screenOff = true;
+    }
+
     // 2) LVGL handler (~5ms)
     if (now - lastLvgl >= LVGL_TICK_MS) {
         lastLvgl = now;
@@ -78,9 +80,4 @@ void loop() {
         lastStatus = now;
         ble_notify_status();
     }
-
-    // 6) Deep sleep TAM TAT (wake bang nut chua on dinh tren board nay).
-    //    Bat lai khi da kiem chung wake hoat dong:
-    // if (ui_can_sleep() && (now - g_lastInputMs > SLEEP_TIMEOUT_MS)) enter_deep_sleep();
-    (void)enter_deep_sleep;   // tranh canh bao "unused function"
 }

@@ -67,6 +67,10 @@ static void updateBtn(Btn &b, uint32_t keyShort, uint32_t keyLong) {
     }
 }
 
+void buttons_flush() {
+    qTail = qHead;   // bo het phim dang cho (vd phim vua danh thuc man hinh)
+}
+
 void buttons_task() {
     // Dung DOWN/UP (khong dung NEXT/PREV vi LVGL nuot NEXT/PREV cho focus noi bo)
     updateBtn(btnA, LV_KEY_DOWN,  LV_KEY_UP);     // A: cuon xuong (giu = len)

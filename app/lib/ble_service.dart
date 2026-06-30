@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'camera_screen.dart';
 
 // Bo dau tieng Viet (font dong ho khong co dau)
 String vnNoAccent(String s) {
@@ -61,6 +60,9 @@ class BleService extends ChangeNotifier {
   bool navActive = false;
   DateTime? lastSync;
 
+  bool autoReconnect = true;   // tu dong ket noi lai khi dong ho bat nguon / vao tam song
+  Timer? _reconnectTimer;
+
   Future<bool> _ensurePerms() async {
     final res = await [
       Permission.bluetoothScan,
@@ -70,8 +72,24 @@ class BleService extends ChangeNotifier {
     return res.values.every((s) => s.isGranted || s.isLimited);
   }
 
+  // Goi khi mo app: tu dong tim & ket noi dong ho, va ket noi lai moi khi mat song.
+  void autoConnectStart() {
+    autoReconnect = true;
+    connect();
+  }
+
+  // Hen gio thu ket noi lai (khi dong ho tat/ngoai tam song se thu lai lien tuc)
+  void _scheduleReconnect() {
+    _reconnectTimer?.cancel();
+    if (!autoReconnect) return;
+    _reconnectTimer = Timer(const Duration(seconds: 4), () {
+      if (autoReconnect && !connected && !busy) connect();
+    });
+  }
+
   Future<void> connect() async {
     if (busy || connected) return;
+    autoReconnect = true;   // bam ket noi -> bat lai tu dong ket noi lai
     busy = true;
     status = 'Đang xin quyền...';
     notifyListeners();
@@ -126,8 +144,9 @@ class BleService extends ChangeNotifier {
 
     if (dev == null) {
       busy = false;
-      status = 'Không tìm thấy đồng hồ. Kiểm tra đồng hồ đã bật?';
+      status = 'Đang chờ đồng hồ bật...';
       notifyListeners();
+      _scheduleReconnect();   // dong ho chua bat -> thu lai sau
       return;
     }
 
@@ -185,6 +204,7 @@ class BleService extends ChangeNotifier {
       busy = false;
       status = 'Lỗi kết nối: $e';
       notifyListeners();
+      _scheduleReconnect();   // ket noi loi -> thu lai
     }
   }
 
@@ -201,17 +221,19 @@ class BleService extends ChangeNotifier {
     connected = false;
     _mediaSub?.cancel();
     _nav = _time = _stat = _wp = _route = _notify = _music = _media = _color = _imgsel = null;
-    status = 'Mất kết nối';
+    status = autoReconnect ? 'Mất kết nối - đang kết nối lại...' : 'Mất kết nối';
     notifyListeners();
+    _scheduleReconnect();   // tu dong ket noi lai (vd dong ho ngu/bat lai)
   }
 
   // Dong ho gui "next"/"prev"/"playpause" -> bam phim media he thong
   void _onMediaCmd(List<int> data) {
     final cmd = utf8.decode(data, allowMalformed: true);
-    // Lenh camera
-    if (cmd == 'camera_open') { openCameraScreen(); return; }
-    if (cmd == 'shoot') { triggerShoot(); return; }
-    if (cmd == 'camera_close') { closeCameraScreen(); return; }
+    // Lenh camera: mo APP MAY ANH GOC cua dien thoai (dong ho chup bang HID Volume)
+    if (cmd == 'camera_open') {
+      _mediaCh.invokeMethod('openCamera').catchError((_) {});
+      return;
+    }
     // Lenh nhac -> bam phim media he thong
     int code = 0;
     if (cmd == 'next') code = 87;          // KEYCODE_MEDIA_NEXT
@@ -286,6 +308,8 @@ class BleService extends ChangeNotifier {
   }
 
   Future<void> disconnect() async {
+    autoReconnect = false;          // nguoi dung chu dong ngat -> khong tu ket noi lai
+    _reconnectTimer?.cancel();
     try {
       await _statSub?.cancel();
       await _connSub?.cancel();
