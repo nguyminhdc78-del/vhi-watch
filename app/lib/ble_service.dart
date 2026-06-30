@@ -234,6 +234,15 @@ class BleService extends ChangeNotifier {
       _mediaCh.invokeMethod('openCamera').catchError((_) {});
       return;
     }
+    // Tim dien thoai: reo to + rung / tat reo
+    if (cmd == 'findphone') {
+      _mediaCh.invokeMethod('findPhone').catchError((_) {});
+      return;
+    }
+    if (cmd == 'findphone_stop') {
+      _mediaCh.invokeMethod('findPhoneStop').catchError((_) {});
+      return;
+    }
     // Lenh nhac -> bam phim media he thong
     int code = 0;
     if (cmd == 'next') code = 87;          // KEYCODE_MEDIA_NEXT

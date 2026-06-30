@@ -23,6 +23,9 @@
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
 
+    <!-- Tim dien thoai: rung -->
+    <uses-permission android:name="android.permission.VIBRATE"/>
+
     <application
         android:label="VHI Watch"
         android:name="${applicationName}"

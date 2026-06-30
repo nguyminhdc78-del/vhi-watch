@@ -14,7 +14,7 @@
 //    NEXT/PREV = di chuyen, ENTER = chon, ESC = quay lai
 // ============================================================
 
-enum Screen { SCR_WATCH, SCR_MENU, SCR_NAV, SCR_UPLOAD, SCR_NOTIFY, SCR_MUSIC, SCR_REMOTE, SCR_CAMERA, SCR_QR };
+enum Screen { SCR_WATCH, SCR_MENU, SCR_NAV, SCR_UPLOAD, SCR_NOTIFY, SCR_MUSIC, SCR_REMOTE, SCR_CAMERA, SCR_QR, SCR_FIND };
 
 static lv_group_t *g_group   = nullptr;
 static lv_obj_t   *g_scr     = nullptr;   // man hinh hien tai
@@ -40,8 +40,9 @@ static const char *MENU_ITEMS[] = { LV_SYMBOL_BELL    " Thong bao",
                                     LV_SYMBOL_IMAGE   " Chup hinh",
                                     LV_SYMBOL_LIST    " The ten (QR)",
                                     LV_SYMBOL_IMAGE   " Doi anh nen",
+                                    LV_SYMBOL_CALL    " Tim dien thoai",
                                     LV_SYMBOL_SETTINGS " Cai dat" };
-static const int   MENU_N = 7;
+static const int   MENU_N = 8;
 static int         menuSel = 0;
 static lv_obj_t   *menuBtns[MENU_N];
 
@@ -169,7 +170,8 @@ static void menu_activate() {
         case 3: request_screen(SCR_CAMERA); break;
         case 4: request_screen(SCR_QR);     break;
         case 5: request_screen(SCR_UPLOAD); break;
-        case 6: /* TODO: cai dat */         break;
+        case 6: request_screen(SCR_FIND);   break;
+        case 7: /* TODO: cai dat */         break;
     }
 }
 
@@ -451,6 +453,41 @@ static void build_camera(lv_obj_t *scr) {
 }
 
 // ============================================================
+//  TIM DIEN THOAI (dong ho ra lenh -> dien thoai reo to + rung)
+// ============================================================
+static void build_find(lv_obj_t *scr) {
+    if (g_sys.bleConnected) ble_send_media("findphone");   // reo dien thoai ngay
+
+    lv_obj_t *t = lv_label_create(scr);
+    lv_obj_set_style_text_font(t, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(t, lv_color_white(), 0);
+    lv_label_set_text(t, LV_SYMBOL_CALL " Tim dien thoai");
+    lv_obj_align(t, LV_ALIGN_TOP_MID, 0, 14);
+
+    lv_obj_t *icon = lv_label_create(scr);
+    lv_obj_set_style_text_font(icon, &lv_font_montserrat_48, 0);
+    lv_obj_set_style_text_color(icon, lv_color_hex(0x33CC66), 0);
+    lv_label_set_text(icon, LV_SYMBOL_BELL);
+    lv_obj_align(icon, LV_ALIGN_CENTER, 0, -20);
+
+    lv_obj_t *info = lv_label_create(scr);
+    lv_obj_set_style_text_font(info, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(info, lv_color_hex(0xCCCCCC), 0);
+    lv_obj_set_width(info, 214);
+    lv_label_set_long_mode(info, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_align(info, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_text(info,
+        g_sys.bleConnected ? "Dang reo dien thoai..." : "Hay ket noi dien thoai truoc!");
+    lv_obj_align(info, LV_ALIGN_CENTER, 0, 36);
+
+    lv_obj_t *hint = lv_label_create(scr);
+    lv_obj_set_style_text_font(hint, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(hint, lv_color_hex(0xE5A23B), 0);
+    lv_label_set_text(hint, "A/B: reo lai   C: tat & thoat");
+    lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -8);
+}
+
+// ============================================================
 //  THE TEN THONG MINH (QR code)
 // ============================================================
 // Ve man QR THANG ra man hinh (it RAM, on dinh hon lv_img full-screen)
@@ -570,6 +607,11 @@ static void key_handler(lv_event_t *e) {
                 qrIdx = (qrIdx + 1) % QR_COUNT; qr_draw();   // A/B: doi o QR (ve lai truc tiep)
             } else if (key == LV_KEY_ESC) request_screen(SCR_MENU);      // C: thoat
             break;
+
+        case SCR_FIND:
+            if (key == LV_KEY_DOWN || key == LV_KEY_ENTER) ble_send_media("findphone");   // A/B: reo lai
+            else if (key == LV_KEY_ESC) { ble_send_media("findphone_stop"); request_screen(SCR_MENU); } // C: tat reo + thoat
+            break;
     }
 }
 
@@ -610,6 +652,7 @@ static void show_screen(Screen s) {
         case SCR_REMOTE: build_remote(g_scr);    break;
         case SCR_CAMERA: build_camera(g_scr);    break;
         case SCR_QR:     build_qr(g_scr);        break;
+        case SCR_FIND:   build_find(g_scr);      break;
     }
 
     lv_scr_load(g_scr);
