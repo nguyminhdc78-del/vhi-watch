@@ -79,8 +79,8 @@ void loop() {
         ble_notify_status();
     }
 
-    // 6) Idle qua lau (va dang o mat dong ho) -> ngu sau
-    if (ui_can_sleep() && (now - g_lastInputMs > SLEEP_TIMEOUT_MS)) {
-        enter_deep_sleep();
-    }
+    // 6) Deep sleep TAM TAT (wake bang nut chua on dinh tren board nay).
+    //    Bat lai khi da kiem chung wake hoat dong:
+    // if (ui_can_sleep() && (now - g_lastInputMs > SLEEP_TIMEOUT_MS)) enter_deep_sleep();
+    (void)enter_deep_sleep;   // tranh canh bao "unused function"
 }
