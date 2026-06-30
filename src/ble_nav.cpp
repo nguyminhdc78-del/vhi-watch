@@ -4,6 +4,7 @@
 #include <NimBLEDevice.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>
+#include "storage.h"
 
 // --- Nhan anh nen qua BLE: phone stream dung WALLPAPER_BYTES (115200) byte RGB565 ---
 static File     wpFile;
@@ -77,8 +78,11 @@ class WpCB : public NimBLECharacteristicCallbacks {
         size_t len = v.size();
         if (len == 0) return;
 
-        if (wpReceived == 0) {                    // chunk dau -> mo file moi
-            wpFile = LittleFS.open(WALLPAPER_PATH, "w");
+        if (wpReceived == 0) {                    // chunk dau -> mo file theo dich upload
+            char path[20];
+            if (g_uploadTarget >= QR_COUNT) strcpy(path, WALLPAPER_PATH);          // 0xFF = anh nen
+            else snprintf(path, sizeof(path), QR_IMG_PATH_FMT, g_uploadTarget);     // 0..N = o QR
+            wpFile = LittleFS.open(path, "w");
             if (!wpFile) { Serial.println("[WP] Khong mo duoc file"); return; }
         }
         if (!wpFile) return;
@@ -89,8 +93,9 @@ class WpCB : public NimBLECharacteristicCallbacks {
         if (wpReceived >= WALLPAPER_BYTES) {      // nhan du -> xong
             wpFile.close();
             wpReceived = 0;
-            g_wpUpdated = true;                   // UI se nap lai o vong loop
-            Serial.println("[WP] Nhan xong anh nen");
+            if (g_uploadTarget >= QR_COUNT) g_wpUpdated = true;   // anh nen
+            else g_qrImgUpdated = true;                          // anh QR
+            Serial.println("[WP] Nhan xong anh");
         }
     }
 };
@@ -125,6 +130,7 @@ class NotifyCB : public NimBLECharacteristicCallbacks {
         strlcpy(g_notify.title, doc["title"] | "", sizeof(g_notify.title));
         strlcpy(g_notify.text,  doc["text"]  | "", sizeof(g_notify.text));
         g_notify.hasNew = true;
+        g_lastInputMs = millis();   // giu thuc de doc thong bao
     }
 };
 
@@ -137,6 +143,27 @@ class MusicCB : public NimBLECharacteristicCallbacks {
         strlcpy(g_music.title,  doc["title"]  | "", sizeof(g_music.title));
         strlcpy(g_music.artist, doc["artist"] | "", sizeof(g_music.artist));
         g_music.playing = (doc["playing"] | 0) != 0;
+    }
+};
+
+// Mau chu: 3 byte R, G, B
+class ColorCB : public NimBLECharacteristicCallbacks {
+    void onWrite(NimBLECharacteristic *c) override {
+        std::string v = c->getValue();
+        if (v.size() >= 3) {
+            g_uiR = (uint8_t)v[0];
+            g_uiG = (uint8_t)v[1];
+            g_uiB = (uint8_t)v[2];
+            g_colorChanged = true;
+        }
+    }
+};
+
+// Chon dich upload anh ke tiep: 1 byte (0xFF = anh nen, 0..QR_COUNT-1 = o QR)
+class ImgSelCB : public NimBLECharacteristicCallbacks {
+    void onWrite(NimBLECharacteristic *c) override {
+        std::string v = c->getValue();
+        if (v.size() >= 1) g_uploadTarget = (uint8_t)v[0];
     }
 };
 
@@ -184,6 +211,16 @@ void ble_init() {
 
     chrMedia = svc->createCharacteristic(
         BLE_CHR_MEDIA_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
+
+    NimBLECharacteristic *chrColor =
+        svc->createCharacteristic(BLE_CHR_COLOR_UUID,
+                                  NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
+    chrColor->setCallbacks(new ColorCB());
+
+    NimBLECharacteristic *chrImgSel =
+        svc->createCharacteristic(BLE_CHR_IMGSEL_UUID,
+                                  NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
+    chrImgSel->setCallbacks(new ImgSelCB());
 
     svc->start();
 

@@ -15,8 +15,25 @@
 #include "ble_nav.h"
 #include "web_upload.h"
 #include "app_state.h"
+#include "esp_sleep.h"
+#include "driver/gpio.h"
 
 static uint32_t lastLvgl = 0, lastUi = 0, lastStatus = 0;
+
+// Vao deep sleep: tat man hinh, ngu, thuc khi nhan nut A(GPIO0) hoac B(GPIO1)
+// (Chip khoi dong lai khi thuc; gio van giu nho dong ho RTC)
+static void enter_deep_sleep() {
+    Serial.println("[SLEEP] Idle 30s -> deep sleep");
+    Serial.flush();
+    display_sleep();
+    delay(50);
+    gpio_set_pull_mode((gpio_num_t)PIN_BTN_A, GPIO_PULLUP_ONLY);
+    gpio_set_pull_mode((gpio_num_t)PIN_BTN_B, GPIO_PULLUP_ONLY);
+    esp_deep_sleep_enable_gpio_wakeup(
+        (1ULL << PIN_BTN_A) | (1ULL << PIN_BTN_B),
+        ESP_GPIO_WAKEUP_GPIO_LOW);   // nhan nut keo xuong LOW -> thuc
+    esp_deep_sleep_start();
+}
 
 void setup() {
     Serial.begin(115200);
@@ -31,6 +48,7 @@ void setup() {
     ble_init();                     // BLE server
     web_on_wallpaper_updated(ui_reload_wallpaper);
 
+    g_lastInputMs = millis();       // bat dau dem idle
     Serial.println("=== San sang ===");
 }
 
@@ -59,5 +77,10 @@ void loop() {
     if (now - lastStatus >= 3000) {
         lastStatus = now;
         ble_notify_status();
+    }
+
+    // 6) Idle qua lau (va dang o mat dong ho) -> ngu sau
+    if (ui_can_sleep() && (now - g_lastInputMs > SLEEP_TIMEOUT_MS)) {
+        enter_deep_sleep();
     }
 }

@@ -6,6 +6,12 @@ import '../theme.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
+  // Bang mau [R,G,B] cho so gio / chu tren dong ho
+  static const List<List<int>> _palette = [
+    [255, 255, 255], [255, 60, 60], [255, 160, 40], [255, 220, 40],
+    [60, 220, 100], [60, 220, 220], [60, 140, 255], [180, 100, 255], [255, 100, 180],
+  ];
+
   @override
   Widget build(BuildContext context) {
     final ble = BleService.I;
@@ -116,6 +122,45 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
             ),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Màu giờ & chữ',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    Text(
+                      ble.connected
+                          ? 'Chạm 1 màu để đổi màu số giờ trên đồng hồ.'
+                          : 'Kết nối đồng hồ trước rồi chọn màu.',
+                      style: TextStyle(color: Colors.grey[400], fontSize: 13),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 14,
+                      runSpacing: 14,
+                      children: [
+                        for (final c in _palette)
+                          GestureDetector(
+                            onTap: () => ble.sendColor(c[0], c[1], c[2]),
+                            child: Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                color: Color.fromARGB(255, c[0], c[1], c[2]),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white24, width: 2),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         );
       },
@@ -133,3 +178,4 @@ class HomeScreen extends StatelessWidget {
         ),
       );
 }
+

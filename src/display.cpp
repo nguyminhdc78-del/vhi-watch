@@ -82,6 +82,11 @@ void display_set_backlight(uint8_t level) {
     lcd.setBrightness(level);
 }
 
+void display_sleep() {
+    lcd.setBrightness(0);   // tat den nen
+    lcd.sleep();            // dua ST7789 vao che do ngu (tiet kiem dong)
+}
+
 void display_init() {
     lcd.init();
     lcd.setRotation(TFT_ROTATION);

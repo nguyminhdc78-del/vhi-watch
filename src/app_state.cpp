@@ -1,4 +1,6 @@
 #include "app_state.h"
+#include <sys/time.h>
+#include <time.h>
 
 NavState   g_nav;
 ClockState g_clock;
@@ -11,14 +13,23 @@ volatile bool g_routeDirty = false;
 
 NotifyState g_notify;
 MusicState  g_music;
+uint8_t      g_uiR = 255, g_uiG = 255, g_uiB = 255;
+volatile bool g_colorChanged = false;
+volatile uint32_t g_lastInputMs = 0;
 
+volatile uint8_t g_uploadTarget = 0xFF;   // mac dinh: anh nen
+volatile bool    g_qrImgUpdated = false;
+
+// Dung dong ho he thong (RTC) -> giu duoc gio qua deep sleep
 void clock_sync(uint32_t epoch) {
-    g_clock.epoch  = epoch;
-    g_clock.baseMs = millis();
+    struct timeval tv;
+    tv.tv_sec  = (time_t)epoch;
+    tv.tv_usec = 0;
+    settimeofday(&tv, nullptr);
     g_clock.synced = true;
 }
 
 uint32_t clock_now_epoch() {
-    if (!g_clock.synced) return 0;
-    return g_clock.epoch + (millis() - g_clock.baseMs) / 1000;
+    time_t t = time(nullptr);
+    return (t > 1700000000) ? (uint32_t)t : 0;   // >2023 = da dong bo
 }

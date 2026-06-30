@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'camera_screen.dart';
 
 // Bo dau tieng Viet (font dong ho khong co dau)
 String vnNoAccent(String s) {
@@ -39,11 +40,13 @@ class BleService extends ChangeNotifier {
   static const _notifyUuid = "6e400007-b5a3-f393-e0a9-e50e24dcca9e";
   static const _musicUuid  = "6e400008-b5a3-f393-e0a9-e50e24dcca9e";
   static const _mediaUuid  = "6e400009-b5a3-f393-e0a9-e50e24dcca9e";
+  static const _colorUuid  = "6e40000a-b5a3-f393-e0a9-e50e24dcca9e";
+  static const _imgselUuid = "6e40000b-b5a3-f393-e0a9-e50e24dcca9e";
 
   static const _mediaCh = MethodChannel('vhi/media'); // gui phim media Android
 
   BluetoothDevice? _device;
-  BluetoothCharacteristic? _nav, _time, _stat, _wp, _route, _notify, _music, _media;
+  BluetoothCharacteristic? _nav, _time, _stat, _wp, _route, _notify, _music, _media, _color, _imgsel;
   StreamSubscription<BluetoothConnectionState>? _connSub;
   StreamSubscription<List<ScanResult>>? _scanSub;
   StreamSubscription<List<int>>? _statSub;
@@ -155,6 +158,8 @@ class BleService extends ChangeNotifier {
             else if (u == _notifyUuid) _notify = c;
             else if (u == _musicUuid) _music = c;
             else if (u == _mediaUuid) _media = c;
+            else if (u == _colorUuid) _color = c;
+            else if (u == _imgselUuid) _imgsel = c;
           }
         }
       }
@@ -195,7 +200,7 @@ class BleService extends ChangeNotifier {
   void _onDisconnect() {
     connected = false;
     _mediaSub?.cancel();
-    _nav = _time = _stat = _wp = _route = _notify = _music = _media = null;
+    _nav = _time = _stat = _wp = _route = _notify = _music = _media = _color = _imgsel = null;
     status = 'Mất kết nối';
     notifyListeners();
   }
@@ -203,6 +208,11 @@ class BleService extends ChangeNotifier {
   // Dong ho gui "next"/"prev"/"playpause" -> bam phim media he thong
   void _onMediaCmd(List<int> data) {
     final cmd = utf8.decode(data, allowMalformed: true);
+    // Lenh camera
+    if (cmd == 'camera_open') { openCameraScreen(); return; }
+    if (cmd == 'shoot') { triggerShoot(); return; }
+    if (cmd == 'camera_close') { closeCameraScreen(); return; }
+    // Lenh nhac -> bam phim media he thong
     int code = 0;
     if (cmd == 'next') code = 87;          // KEYCODE_MEDIA_NEXT
     else if (cmd == 'prev') code = 88;     // KEYCODE_MEDIA_PREVIOUS
@@ -212,8 +222,17 @@ class BleService extends ChangeNotifier {
     }
   }
 
-  bool get canSendWallpaper => _wp != null;
   bool get canSendRoute => _route != null;
+  bool get canSetColor => _color != null;
+
+  // Gui mau chu (R,G,B 0..255) xuong dong ho
+  Future<void> sendColor(int r, int g, int b) async {
+    if (_color == null) return;
+    try {
+      await _color!.write([r & 0xff, g & 0xff, b & 0xff], withoutResponse: true);
+    } catch (_) {}
+  }
+
 
   String _clip(String s, int n) => s.length > n ? s.substring(0, n) : s;
 
@@ -247,10 +266,15 @@ class BleService extends ChangeNotifier {
     } catch (_) {}
   }
 
-  // Gui anh nen RGB565 (240x240 = 115200 byte) xuong dong ho theo tung chunk
-  Future<void> sendWallpaper(Uint8List data,
+  bool get canUploadImage => _wp != null && _imgsel != null;
+
+  // Gui anh RGB565 (240x240 = 115200 byte) xuong dong ho.
+  // target: 0xFF = anh nen; 0..3 = o QR.
+  Future<void> sendImage(int target, Uint8List data,
       {required void Function(double) onProgress}) async {
-    if (_wp == null) throw Exception('Chưa kết nối đồng hồ');
+    if (_wp == null || _imgsel == null) throw Exception('Chưa kết nối đồng hồ');
+    await _imgsel!.write([target & 0xff], withoutResponse: true);   // chon dich
+    await Future.delayed(const Duration(milliseconds: 60));
     int mtu = 23;
     try { mtu = _device?.mtuNow ?? 23; } catch (_) {}
     final int chunk = (mtu - 5).clamp(20, 240);

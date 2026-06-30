@@ -1,5 +1,6 @@
 #pragma once
 #include <Arduino.h>
+#include "config.h"
 
 // ============================================================
 //  Trang thai dung chung giua BLE / Web / UI
@@ -71,6 +72,17 @@ struct MusicState {
     bool playing     = false;
 };
 extern MusicState g_music;
+
+// --- Mau chu giao dien (mac dinh trang) ---
+extern uint8_t      g_uiR, g_uiG, g_uiB;
+extern volatile bool g_colorChanged;
+
+// Moc thoi gian co hoat dong gan nhat (nut bam / thong bao) - de tinh idle -> deep sleep
+extern volatile uint32_t g_lastInputMs;
+
+// --- Upload anh: chon dich (0xFF = anh nen, 0..QR_COUNT-1 = o QR) ---
+extern volatile uint8_t g_uploadTarget;
+extern volatile bool    g_qrImgUpdated;   // vua nhan xong 1 anh QR
 
 // Lay gio hien tai (epoch giay) tu m2 dong bo
 uint32_t clock_now_epoch();

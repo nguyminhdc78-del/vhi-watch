@@ -5,11 +5,12 @@
 // Khoi tao LittleFS
 bool storage_init();
 
-// Co wallpaper trong flash khong?
-bool storage_has_wallpaper();
+// Nap/giai phong 1 anh RGB565 240x240 tu LittleFS (dung chung cho anh nen + QR)
+lv_img_dsc_t* storage_load_image(const char *path);
+void          storage_free_image();
+bool          storage_has_image(const char *path);
 
-// Nap wallpaper (RGB565 raw) tu LittleFS vao buffer heap.
-// Tra ve con tro lv_img_dsc_t da cap phat (NULL neu loi / het RAM).
-// Nho goi storage_free_wallpaper() khi roi man hinh dong ho.
+// Tien ich rieng cho anh nen
+bool          storage_has_wallpaper();
 lv_img_dsc_t* storage_load_wallpaper();
 void          storage_free_wallpaper();

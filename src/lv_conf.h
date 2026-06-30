@@ -50,5 +50,8 @@
 #define LV_USE_PNG 0
 #define LV_USE_SJPG 0
 
+/*==================== QR CODE: dung ANH upload (khong tao tu link) ====================*/
+#define LV_USE_QRCODE 0
+
 #endif /* LV_CONF_H */
 #endif /* bat file */

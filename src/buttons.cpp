@@ -1,5 +1,6 @@
 #include "buttons.h"
 #include "config.h"
+#include "app_state.h"
 #include <Arduino.h>
 
 // ============================================================
@@ -30,6 +31,7 @@ static lv_indev_t* indev_keypad = nullptr;
 static lv_group_t* ui_group     = nullptr;
 
 static void pushKey(uint32_t k) {
+    g_lastInputMs = millis();   // co hoat dong -> reset dem idle (chong deep sleep)
     uint8_t next = (qHead + 1) % 8;
     if (next != qTail) { keyQueue[qHead] = k; qHead = next; }
 }

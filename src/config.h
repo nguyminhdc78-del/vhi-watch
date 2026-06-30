@@ -43,6 +43,12 @@
 #define BLE_CHR_NOTIFY_UUID "6e400007-b5a3-f393-e0a9-e50e24dcca9e" // phone -> watch: thong bao (JSON app/title/text)
 #define BLE_CHR_MUSIC_UUID  "6e400008-b5a3-f393-e0a9-e50e24dcca9e" // phone -> watch: bai hat dang phat (JSON)
 #define BLE_CHR_MEDIA_UUID  "6e400009-b5a3-f393-e0a9-e50e24dcca9e" // watch -> phone: lenh dieu khien nhac (notify)
+#define BLE_CHR_COLOR_UUID  "6e40000a-b5a3-f393-e0a9-e50e24dcca9e" // phone -> watch: mau chu (3 byte R,G,B)
+#define BLE_CHR_IMGSEL_UUID "6e40000b-b5a3-f393-e0a9-e50e24dcca9e" // phone -> watch: chon dich upload anh (0xFF=anh nen, 0..N=o QR)
+
+// The ten / QR badge: so o luu anh QR (240x240 RGB565 trong LittleFS)
+#define QR_COUNT            4
+#define QR_IMG_PATH_FMT     "/qr%d.bin"
 
 // ---------------- WiFi / Web upload anh ----------------
 // Che do Access Point: dien thoai ket noi truc tiep vao wifi cua dong ho de upload anh
@@ -54,6 +60,10 @@
 // Anh wallpaper: raw RGB565, 240x240 = 115200 bytes, luu LittleFS
 #define WALLPAPER_PATH      "/wallpaper.bin"
 #define WALLPAPER_BYTES     (SCREEN_W * SCREEN_H * 2)
+
+// ---------------- Deep sleep ----------------
+// Khong bam nut trong bao lau (ms) thi ngu sau (chi khi dang o mat dong ho)
+#define SLEEP_TIMEOUT_MS    30000
 
 // ---------------- LVGL ----------------
 #define LVGL_TICK_MS        5

@@ -20,6 +20,15 @@ class _WallpaperScreenState extends State<WallpaperScreen> {
   Uint8List? _rgb565; // du lieu gui di
   String _stat = '';
   bool _sending = false;
+  int _target = 0xFF;  // 0xFF = anh nen; 0..3 = o QR
+
+  static const _targets = [
+    {'v': 0xFF, 'n': 'Ảnh nền'},
+    {'v': 0, 'n': 'QR 1'},
+    {'v': 1, 'n': 'QR 2'},
+    {'v': 2, 'n': 'QR 3'},
+    {'v': 3, 'n': 'QR 4'},
+  ];
 
   Future<void> _pick() async {
     final x = await ImagePicker().pickImage(source: ImageSource.gallery);
@@ -55,7 +64,7 @@ class _WallpaperScreenState extends State<WallpaperScreen> {
 
   Future<void> _send() async {
     if (_rgb565 == null) return;
-    if (!BleService.I.canSendWallpaper) {
+    if (!BleService.I.canUploadImage) {
       setState(() => _stat =
           'Chưa kết nối đồng hồ. Vào tab "Trang chủ" → Kết nối trước.');
       return;
@@ -65,10 +74,12 @@ class _WallpaperScreenState extends State<WallpaperScreen> {
       _stat = 'Đang gửi qua Bluetooth... 0%';
     });
     try {
-      await BleService.I.sendWallpaper(_rgb565!, onProgress: (p) {
+      await BleService.I.sendImage(_target, _rgb565!, onProgress: (p) {
         setState(() => _stat = 'Đang gửi... ${(p * 100).toStringAsFixed(0)}%');
       });
-      setState(() => _stat = '✅ Đã gửi xong! Đồng hồ sẽ hiện ảnh sau vài giây.');
+      setState(() => _stat = _target == 0xFF
+          ? '✅ Đã gửi! Ảnh nền sẽ hiện sau vài giây.'
+          : '✅ Đã gửi! Vào menu "Thẻ tên (QR)" trên đồng hồ để xem.');
     } catch (e) {
       setState(() => _stat = 'Lỗi gửi: $e');
     } finally {
@@ -87,14 +98,23 @@ class _WallpaperScreenState extends State<WallpaperScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text('Đổi ảnh nền đồng hồ',
+                const Text('Ảnh nền & Thẻ QR',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
                 Text(
-                  '1. Kết nối đồng hồ qua Bluetooth (tab Trang chủ).\n'
-                  '2. Chọn ảnh bên dưới.\n'
-                  '3. Nhấn "Gửi vào đồng hồ" — chờ ~30 giây.',
+                  'Gửi ảnh nền HOẶC ảnh QR (Zalo/Mess/ngân hàng...) vào đồng hồ. '
+                  'Chọn đích, chọn ảnh, rồi gửi (~30 giây).',
                   style: TextStyle(color: Colors.grey[400], height: 1.5, fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int>(
+                  value: _target,
+                  decoration: const InputDecoration(labelText: 'Gửi vào'),
+                  items: [
+                    for (final t in _targets)
+                      DropdownMenuItem(value: t['v'] as int, child: Text(t['n'] as String)),
+                  ],
+                  onChanged: (v) => setState(() => _target = v ?? 0xFF),
                 ),
                 const SizedBox(height: 14),
                 Center(
