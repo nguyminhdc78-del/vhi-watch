@@ -13,7 +13,7 @@ class QuickCallScreen extends StatefulWidget {
 }
 
 class _QuickCallScreenState extends State<QuickCallScreen> {
-  bool _callGranted = true;
+  bool _callGranted = false;
 
   @override
   void initState() {
@@ -22,17 +22,14 @@ class _QuickCallScreenState extends State<QuickCallScreen> {
   }
 
   Future<void> _checkPerm() async {
-    final st = await Permission.phone.status;
-    if (mounted) setState(() => _callGranted = st.isGranted);
+    final ok = await BleService.I.hasCallPermission();   // kiem tra chinh xac o tang he thong
+    if (mounted) setState(() => _callGranted = ok);
   }
 
   Future<void> _grantCall() async {
-    var st = await Permission.phone.request();
-    if (st.isPermanentlyDenied) {
-      await openAppSettings();
-      st = await Permission.phone.status;
-    }
-    if (mounted) setState(() => _callGranted = st.isGranted);
+    final st = await Permission.phone.request();
+    if (st.isPermanentlyDenied) await openAppSettings();
+    await _checkPerm();
   }
 
   @override
@@ -44,7 +41,23 @@ class _QuickCallScreenState extends State<QuickCallScreen> {
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            if (!_callGranted)
+            if (_callGranted)
+              Card(
+                color: Colors.green.withOpacity(0.12),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      Icon(Icons.check_circle, color: Colors.green, size: 20),
+                      SizedBox(width: 8),
+                      Expanded(
+                          child: Text('Gọi trực tiếp qua SIM: đã bật',
+                              style: TextStyle(fontWeight: FontWeight.w500))),
+                    ],
+                  ),
+                ),
+              )
+            else
               Card(
                 color: Colors.orange.withOpacity(0.15),
                 child: Padding(

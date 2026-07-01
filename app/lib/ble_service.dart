@@ -416,6 +416,14 @@ class BleService extends ChangeNotifier {
     } catch (_) {}
   }
 
+  // Kiem tra quyen goi truc tiep (CALL_PHONE) o tang he thong (chinh xac)
+  Future<bool> hasCallPermission() async {
+    try {
+      final r = await _mediaCh.invokeMethod('hasCallPerm');
+      return r == true;
+    } catch (_) { return false; }
+  }
+
   // Chon 1 lien he tu danh ba dien thoai (native contact picker)
   Future<void> pickFromContacts() async {
     try {

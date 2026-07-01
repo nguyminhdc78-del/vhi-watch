@@ -152,6 +152,10 @@ class MainActivity : FlutterActivity() {
                 }
                 "callAnswer" -> { answerCall(); result.success(true) }
                 "callReject" -> { rejectCall(); result.success(true) }
+                "hasCallPerm" -> {
+                    result.success(checkSelfPermission(Manifest.permission.CALL_PHONE)
+                        == PackageManager.PERMISSION_GRANTED)
+                }
                 "openNotifAccess" -> {
                     val i = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
                     i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
