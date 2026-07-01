@@ -260,9 +260,8 @@ class CallListener : NotificationListenerService() {
         fun reject() { try { declinePI?.send() } catch (_: Exception) {} }
     }
 
-    // TAM TAT chuyen tiep thong bao tin nhan (nghi ngo lam nghen BLE tren C3).
-    // Doi thanh true de bat lai.
-    private val forwardNotifications = false
+    // Chuyen tiep thong bao tin nhan len dong ho (da co dedup + bo ongoing nen nhe).
+    private val forwardNotifications = true
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val n = sbn.notification ?: return
