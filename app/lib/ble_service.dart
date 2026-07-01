@@ -19,6 +19,10 @@ String vnNoAccent(String s) {
       out = out.replaceAll(ch, base).replaceAll(ch.toUpperCase(), base.toUpperCase());
     }
   });
+  out = out.replaceAll('Đ', 'D').replaceAll('đ', 'd');
+  // Bo moi ky tu ngoai ASCII con sot lai: dau ket hop (chu dang NFD), emoji, ky hieu la
+  // -> font dong ho chi co ASCII nen day la cach chac chan het bi o vuong.
+  out = out.replaceAll(RegExp(r'[^\x00-\x7F]'), '');
   return out;
 }
 
