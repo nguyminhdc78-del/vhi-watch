@@ -37,9 +37,12 @@ class BleService extends ChangeNotifier {
     // Nhan su kien cuoc goi tu native (CallListener) -> gui xuong dong ho
     _mediaCh.setMethodCallHandler((call) async {
       if (call.method == 'incomingCall') {
+        if (_callShowing) return null;   // da co cuoc goi dang hien -> bo trung (SIM + thong bao)
+        _callShowing = true;
         final a = call.arguments as Map?;
         sendCall(a?['name']?.toString() ?? 'Cuoc goi den', a?['app']?.toString() ?? '', true);
       } else if (call.method == 'callEnded') {
+        _callShowing = false;
         sendCall('', '', false);
       } else if (call.method == 'notification') {
         final a = call.arguments as Map?;
@@ -78,6 +81,7 @@ class BleService extends ChangeNotifier {
   // Danh ba nhanh (goi tu dong ho). Moi item: {'name':.., 'number':..}
   List<Map<String, String>> favorites = [];
   static const int maxFavorites = 12;
+  bool _callShowing = false;   // dang hien 1 cuoc goi den (chong trung SIM + thong bao)
   StreamSubscription<BluetoothConnectionState>? _connSub;
   StreamSubscription<List<ScanResult>>? _scanSub;
   StreamSubscription<List<int>>? _statSub;
@@ -251,6 +255,7 @@ class BleService extends ChangeNotifier {
       status = 'Đã kết nối: ${dev.platformName}';
       notifyListeners();
       await syncTime();
+      _mediaCh.invokeMethod('watchCalls').catchError((_) {});   // theo doi cuoc goi SIM
       // Dời việc nặng (thời tiết + danh bạ) ra sau vài giây cho link ổn định truoc
       Future.delayed(const Duration(seconds: 3), () {
         if (connected) { _startWeatherLoop(); syncContacts(); }

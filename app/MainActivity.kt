@@ -13,6 +13,9 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.ContactsContract
 import android.telecom.TelecomManager
+import android.telephony.PhoneStateListener
+import android.telephony.TelephonyCallback
+import android.telephony.TelephonyManager
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.Ringtone
@@ -67,6 +70,43 @@ class MainActivity : FlutterActivity() {
 
     private fun hasAnswerPerm(): Boolean =
         checkSelfPermission(Manifest.permission.ANSWER_PHONE_CALLS) == PackageManager.PERMISSION_GRANTED
+
+    // Theo doi cuoc goi SIM (do chuong) -> gui len dong ho
+    private var callStateRegistered = false
+    private var lastCallState = TelephonyManager.CALL_STATE_IDLE
+    private fun watchCallState() {
+        if (callStateRegistered) return
+        if (checkSelfPermission(Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) return
+        try {
+            val tm = getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+            if (Build.VERSION.SDK_INT >= 31) {
+                val cb = object : TelephonyCallback(), TelephonyCallback.CallStateListener {
+                    override fun onCallStateChanged(state: Int) = onCallState(state)
+                }
+                tm.registerTelephonyCallback(mainExecutor, cb)
+            } else {
+                @Suppress("DEPRECATION")
+                val l = object : PhoneStateListener() {
+                    @Deprecated("Deprecated in Java")
+                    override fun onCallStateChanged(state: Int, phoneNumber: String?) = onCallState(state)
+                }
+                @Suppress("DEPRECATION")
+                tm.listen(l, PhoneStateListener.LISTEN_CALL_STATE)
+            }
+            callStateRegistered = true
+        } catch (_: Exception) {}
+    }
+
+    private fun onCallState(state: Int) {
+        if (state == lastCallState) return
+        lastCallState = state
+        when (state) {
+            TelephonyManager.CALL_STATE_RINGING ->
+                mediaChannel?.invokeMethod("incomingCall", mapOf("name" to "Cuoc goi den", "app" to "Dien thoai"))
+            else ->   // OFFHOOK (da nghe) hoac IDLE (ket thuc) -> dong man cuoc goi
+                mediaChannel?.invokeMethod("callEnded", null)
+        }
+    }
 
     // Nghe may: SIM dung TelecomManager (dang tin cay), VoIP ban lai nut Nghe cua thong bao
     private fun answerCall() {
@@ -156,6 +196,7 @@ class MainActivity : FlutterActivity() {
                     result.success(checkSelfPermission(Manifest.permission.CALL_PHONE)
                         == PackageManager.PERMISSION_GRANTED)
                 }
+                "watchCalls" -> { watchCallState(); result.success(true) }
                 "openNotifAccess" -> {
                     val i = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
                     i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
