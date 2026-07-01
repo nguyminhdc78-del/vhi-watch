@@ -3,6 +3,7 @@ package com.vhitek.vhi_watch
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -11,10 +12,14 @@ import android.media.AudioManager
 import android.media.Ringtone
 import android.media.RingtoneManager
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.provider.MediaStore
+import android.service.notification.NotificationListenerService
+import android.service.notification.StatusBarNotification
 import android.view.KeyEvent
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -27,9 +32,15 @@ class MainActivity : FlutterActivity() {
 
     private fun vibrator(): Vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
 
+    companion object {
+        var mediaChannel: MethodChannel? = null   // de dich vu nen goi nguoc ve Flutter
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channel).setMethodCallHandler { call, result ->
+        val ch = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channel)
+        mediaChannel = ch
+        ch.setMethodCallHandler { call, result ->
             when (call.method) {
                 "mediaKey" -> {
                     val code = call.argument<Int>("code") ?: 0
@@ -92,6 +103,8 @@ class MainActivity : FlutterActivity() {
                     stopService(Intent(this, WatchService::class.java))
                     result.success(true)
                 }
+                "callAnswer" -> { CallListener.answer(); result.success(true) }
+                "callReject" -> { CallListener.reject(); result.success(true) }
                 else -> result.notImplemented()
             }
         }
@@ -132,5 +145,68 @@ class WatchService : Service() {
             .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
             .setOngoing(true)
             .build()
+    }
+}
+
+// ============================================================
+//  Nghe THONG BAO CUOC GOI (moi app: SIM, Zalo, Mess...)
+//  - Cuoc goi den = thong bao category CALL co nut "Nghe".
+//  - Lay ten nguoi goi + nut Nghe/Tu choi, gui len dong ho.
+//  - Dong ho bam nut -> ban lai dung nut Nghe/Tu choi cua app do.
+// ============================================================
+class CallListener : NotificationListenerService() {
+    companion object {
+        private var answerPI: PendingIntent? = null
+        private var declinePI: PendingIntent? = null
+        private var currentKey: String? = null
+
+        fun answer() { try { answerPI?.send() } catch (_: Exception) {} }
+        fun reject() { try { declinePI?.send() } catch (_: Exception) {} }
+    }
+
+    override fun onNotificationPosted(sbn: StatusBarNotification) {
+        val n = sbn.notification ?: return
+        if (n.category != Notification.CATEGORY_CALL) return
+        val actions = n.actions ?: return
+
+        var ans: PendingIntent? = null
+        var dec: PendingIntent? = null
+        for (a in actions) {
+            val t = (a.title ?: "").toString().lowercase()
+            if (t.contains("answer") || t.contains("tra loi") || t.contains("trả lời") ||
+                t.contains("nghe") || t.contains("accept") || t.contains("chap nhan") ||
+                t.contains("chấp nhận") || t.contains("bắt máy") || t.contains("bat may"))
+                ans = a.actionIntent
+            else if (t.contains("decline") || t.contains("reject") || t.contains("tu choi") ||
+                t.contains("từ chối") || t.contains("hang") || t.contains("end") ||
+                t.contains("dismiss") || t.contains("ignore") || t.contains("ket thuc"))
+                dec = a.actionIntent
+        }
+        if (ans == null) return   // khong co nut Nghe -> khong phai cuoc goi den (dang do chuong)
+
+        answerPI = ans
+        declinePI = dec ?: if (actions.isNotEmpty()) actions[0].actionIntent else null
+        currentKey = sbn.key
+
+        val title = n.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: "Cuoc goi den"
+        notifyFlutter("incomingCall", mapOf("name" to title, "app" to appLabel(sbn.packageName)))
+    }
+
+    override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        if (sbn.key == currentKey) {
+            currentKey = null; answerPI = null; declinePI = null
+            notifyFlutter("callEnded", null)
+        }
+    }
+
+    private fun appLabel(pkg: String): String = try {
+        val pm = packageManager
+        pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+    } catch (_: Exception) { pkg }
+
+    private fun notifyFlutter(method: String, args: Any?) {
+        Handler(Looper.getMainLooper()).post {
+            try { MainActivity.mediaChannel?.invokeMethod(method, args) } catch (_: Exception) {}
+        }
     }
 }

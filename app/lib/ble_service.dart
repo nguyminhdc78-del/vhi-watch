@@ -27,7 +27,18 @@ String vnNoAccent(String s) {
 //  Singleton + ChangeNotifier de UI lang nghe cap nhat.
 // ============================================================
 class BleService extends ChangeNotifier {
-  BleService._();
+  BleService._() {
+    // Nhan su kien cuoc goi tu native (CallListener) -> gui xuong dong ho
+    _mediaCh.setMethodCallHandler((call) async {
+      if (call.method == 'incomingCall') {
+        final a = call.arguments as Map?;
+        sendCall(a?['name']?.toString() ?? 'Cuoc goi den', a?['app']?.toString() ?? '', true);
+      } else if (call.method == 'callEnded') {
+        sendCall('', '', false);
+      }
+      return null;
+    });
+  }
   static final BleService I = BleService._();
 
   // UUID khop firmware config.h
@@ -43,11 +54,12 @@ class BleService extends ChangeNotifier {
   static const _colorUuid  = "6e40000a-b5a3-f393-e0a9-e50e24dcca9e";
   static const _imgselUuid = "6e40000b-b5a3-f393-e0a9-e50e24dcca9e";
   static const _weatherUuid = "6e40000c-b5a3-f393-e0a9-e50e24dcca9e";
+  static const _callUuid    = "6e40000d-b5a3-f393-e0a9-e50e24dcca9e";
 
   static const _mediaCh = MethodChannel('vhi/media'); // gui phim media Android
 
   BluetoothDevice? _device;
-  BluetoothCharacteristic? _nav, _time, _stat, _wp, _route, _notify, _music, _media, _color, _imgsel, _weather;
+  BluetoothCharacteristic? _nav, _time, _stat, _wp, _route, _notify, _music, _media, _color, _imgsel, _weather, _call;
   StreamSubscription<BluetoothConnectionState>? _connSub;
   StreamSubscription<List<ScanResult>>? _scanSub;
   StreamSubscription<List<int>>? _statSub;
@@ -194,6 +206,7 @@ class BleService extends ChangeNotifier {
             else if (u == _colorUuid) _color = c;
             else if (u == _imgselUuid) _imgsel = c;
             else if (u == _weatherUuid) _weather = c;
+            else if (u == _callUuid) _call = c;
           }
         }
       }
@@ -237,7 +250,7 @@ class BleService extends ChangeNotifier {
     connected = false;
     _mediaSub?.cancel();
     _weatherTimer?.cancel();
-    _nav = _time = _stat = _wp = _route = _notify = _music = _media = _color = _imgsel = _weather = null;
+    _nav = _time = _stat = _wp = _route = _notify = _music = _media = _color = _imgsel = _weather = _call = null;
     status = autoReconnect ? 'Mất kết nối - đang kết nối lại...' : 'Mất kết nối';
     notifyListeners();
     _scheduleReconnect();   // tu dong ket noi lai (vd dong ho ngu/bat lai)
@@ -260,6 +273,9 @@ class BleService extends ChangeNotifier {
       _mediaCh.invokeMethod('findPhoneStop').catchError((_) {});
       return;
     }
+    // Cuoc goi: dong ho bam Nghe / Tu choi -> ban lai nut cua app dang goi
+    if (cmd == 'call_answer') { _mediaCh.invokeMethod('callAnswer').catchError((_) {}); return; }
+    if (cmd == 'call_reject') { _mediaCh.invokeMethod('callReject').catchError((_) {}); return; }
     // Lenh nhac -> bam phim media he thong
     int code = 0;
     if (cmd == 'next') code = 87;          // KEYCODE_MEDIA_NEXT
@@ -306,6 +322,15 @@ class BleService extends ChangeNotifier {
     weatherCity = city.trim().isEmpty ? weatherCity : city.trim();
     notifyListeners();
     await sendWeather();
+  }
+
+  // --- Cuoc goi den: gui xuong dong ho ---
+  Future<void> sendCall(String name, String app, bool ringing) async {
+    if (_call == null) return;
+    final js = ringing
+        ? jsonEncode({'st': 1, 'name': vnNoAccent(_clip(name, 38)), 'app': vnNoAccent(_clip(app, 20))})
+        : jsonEncode({'st': 0});
+    try { await _call!.write(utf8.encode(js), withoutResponse: true); } catch (_) {}
   }
 
 

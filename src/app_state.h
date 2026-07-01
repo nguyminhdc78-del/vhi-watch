@@ -85,6 +85,15 @@ struct WeatherState {
 };
 extern WeatherState g_weather;
 
+// --- Cuoc goi den (app gui xuong khi co cuoc goi tu SIM/Zalo/Mess...) ---
+struct CallState {
+    bool ringing   = false;   // dang co cuoc goi den
+    char name[40]  = "";      // ten/so nguoi goi
+    char app[24]   = "";      // app goi (Zalo, Mess, Dien thoai...)
+    bool changed   = false;   // co thay doi -> UI xu ly (mo/dong man cuoc goi)
+};
+extern CallState g_call;
+
 // Moc thoi gian co hoat dong gan nhat (nut bam / thong bao) - de tinh idle -> deep sleep
 extern volatile uint32_t g_lastInputMs;
 

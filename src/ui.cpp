@@ -17,7 +17,7 @@
 //    NEXT/PREV = di chuyen, ENTER = chon, ESC = quay lai
 // ============================================================
 
-enum Screen { SCR_WATCH, SCR_MENU, SCR_NAV, SCR_UPLOAD, SCR_NOTIFY, SCR_MUSIC, SCR_REMOTE, SCR_CAMERA, SCR_QR, SCR_FIND, SCR_TIMER };
+enum Screen { SCR_WATCH, SCR_MENU, SCR_NAV, SCR_UPLOAD, SCR_NOTIFY, SCR_MUSIC, SCR_REMOTE, SCR_CAMERA, SCR_QR, SCR_FIND, SCR_TIMER, SCR_CALL };
 
 static lv_group_t *g_group   = nullptr;
 static lv_obj_t   *g_scr     = nullptr;   // man hinh hien tai
@@ -706,6 +706,12 @@ static void key_handler(lv_event_t *e) {
             else if (key == LV_KEY_UP)    tmr_cycle();                // A giu: doi che do
             else if (key == LV_KEY_ESC)   request_screen(SCR_MENU);   // C: thoat
             break;
+
+        case SCR_CALL:
+            if (key == LV_KEY_DOWN)  { ble_send_media("call_reject"); g_call.ringing = false; request_screen(SCR_WATCH); } // A: tu choi
+            else if (key == LV_KEY_ENTER) { ble_send_media("call_answer"); g_call.ringing = false; request_screen(SCR_WATCH); } // B: nghe
+            else if (key == LV_KEY_ESC)   request_screen(SCR_WATCH);   // C: bo qua
+            break;
     }
 }
 
@@ -789,6 +795,44 @@ static void build_timer(lv_obj_t *scr) {
 }
 
 // ============================================================
+//  CUOC GOI DEN
+// ============================================================
+static void build_call(lv_obj_t *scr) {
+    lv_obj_t *t = lv_label_create(scr);
+    lv_obj_set_style_text_font(t, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(t, lv_color_hex(0x33CC66), 0);
+    lv_label_set_text(t, LV_SYMBOL_CALL " Cuoc goi den");
+    lv_obj_align(t, LV_ALIGN_TOP_MID, 0, 16);
+
+    lv_obj_t *app = lv_label_create(scr);
+    lv_obj_set_style_text_font(app, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(app, lv_color_hex(0x999999), 0);
+    lv_label_set_text(app, g_call.app[0] ? g_call.app : "Dien thoai");
+    lv_obj_align(app, LV_ALIGN_TOP_MID, 0, 44);
+
+    lv_obj_t *name = lv_label_create(scr);
+    lv_obj_set_style_text_font(name, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(name, lv_color_white(), 0);
+    lv_obj_set_width(name, 220);
+    lv_label_set_long_mode(name, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_align(name, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_text(name, g_call.name[0] ? g_call.name : "Khong ro so");
+    lv_obj_align(name, LV_ALIGN_CENTER, 0, -6);
+
+    lv_obj_t *rej = lv_label_create(scr);
+    lv_obj_set_style_text_font(rej, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(rej, lv_color_hex(0xFF4444), 0);
+    lv_label_set_text(rej, "A: TU CHOI");
+    lv_obj_align(rej, LV_ALIGN_BOTTOM_LEFT, 10, -8);
+
+    lv_obj_t *ans = lv_label_create(scr);
+    lv_obj_set_style_text_font(ans, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(ans, lv_color_hex(0x33CC66), 0);
+    lv_label_set_text(ans, "B: NGHE");
+    lv_obj_align(ans, LV_ALIGN_BOTTOM_RIGHT, -10, -8);
+}
+
+// ============================================================
 //  Chuyen man hinh
 // ============================================================
 static void show_screen(Screen s) {
@@ -828,6 +872,7 @@ static void show_screen(Screen s) {
         case SCR_QR:     build_qr(g_scr);        break;
         case SCR_FIND:   build_find(g_scr);      break;
         case SCR_TIMER:  build_timer(g_scr);     break;
+        case SCR_CALL:   build_call(g_scr);      break;
     }
 
     lv_scr_load(g_scr);
@@ -867,8 +912,15 @@ void ui_tick() {
     // Vua nhan xong anh nen moi qua BLE -> nap lai
     if (g_wpUpdated) { g_wpUpdated = false; ui_reload_wallpaper(); }
 
-    // Co thong bao moi -> tu mo man Thong bao (khi dang o man dong ho)
-    if (g_notify.hasNew && g_cur == SCR_WATCH) request_screen(SCR_NOTIFY);
+    // Cuoc goi den: tu mo man cuoc goi; het goi -> dong lai
+    if (g_call.changed) {
+        g_call.changed = false;
+        if (g_call.ringing && g_cur != SCR_CALL) request_screen(SCR_CALL);
+        else if (!g_call.ringing && g_cur == SCR_CALL) request_screen(SCR_WATCH);
+    }
+
+    // Co thong bao moi -> tu mo man Thong bao (khi dang o man dong ho, khong phai luc co cuoc goi)
+    if (g_notify.hasNew && g_cur == SCR_WATCH && !g_call.ringing) request_screen(SCR_NOTIFY);
 
     // Doi mau chu (tu app) -> ve lai gio ngay neu dang o mat dong ho
     if (g_colorChanged) {

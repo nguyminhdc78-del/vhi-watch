@@ -179,6 +179,23 @@ class WeatherCB : public NimBLECharacteristicCallbacks {
     }
 };
 
+// Cuoc goi den: {"st":1,"name":"Me","app":"Zalo"}  (st=1 dang goi, st=0 ket thuc)
+class CallCB : public NimBLECharacteristicCallbacks {
+    void onWrite(NimBLECharacteristic *c) override {
+        std::string v = c->getValue();
+        StaticJsonDocument<256> doc;
+        if (deserializeJson(doc, v.c_str()) != DeserializationError::Ok) return;
+        bool ring = (doc["st"] | 0) != 0;
+        g_call.ringing = ring;
+        if (ring) {
+            strlcpy(g_call.name, doc["name"] | "", sizeof(g_call.name));
+            strlcpy(g_call.app,  doc["app"]  | "", sizeof(g_call.app));
+        }
+        g_call.changed = true;
+        g_lastInputMs = millis();   // giu thuc de thay cuoc goi
+    }
+};
+
 static NimBLECharacteristic *chrMedia = nullptr;
 
 void ble_init() {
@@ -238,6 +255,11 @@ void ble_init() {
         svc->createCharacteristic(BLE_CHR_WEATHER_UUID,
                                   NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
     chrWeather->setCallbacks(new WeatherCB());
+
+    NimBLECharacteristic *chrCall =
+        svc->createCharacteristic(BLE_CHR_CALL_UUID,
+                                  NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
+    chrCall->setCallbacks(new CallCB());
 
     svc->start();
 

@@ -73,6 +73,17 @@
             android:name=".WatchService"
             android:exported="false"
             android:foregroundServiceType="connectedDevice"/>
+
+        <!-- Nghe thong bao cuoc goi den (SIM/Zalo/Mess) -> hien tren dong ho -->
+        <service
+            android:label="VHI Watch - Cuoc goi"
+            android:name=".CallListener"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
     </application>
 
     <queries>
