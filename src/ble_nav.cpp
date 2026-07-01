@@ -287,9 +287,20 @@ void ble_init() {
 
     svc->start();
 
+    // Quang cao gon & chac: TEN nam trong goi chinh (app do theo ten luon thay),
+    // UUID dich vu de o scan-response (app cu loc theo UUID van chay).
     NimBLEAdvertising *adv = NimBLEDevice::getAdvertising();
-    adv->addServiceUUID(BLE_SVC_UUID);
-    adv->setScanResponse(true);
+    NimBLEAdvertisementData advData;
+    advData.setFlags(0x06);                       // LE General Discoverable + BR/EDR not supported
+    advData.setName(BLE_DEVICE_NAME);
+    adv->setAdvertisementData(advData);
+
+    NimBLEAdvertisementData scanData;
+    scanData.setCompleteServices(NimBLEUUID(BLE_SVC_UUID));
+    adv->setScanResponseData(scanData);
+
+    adv->setMinInterval(0x30);                     // ~30ms: de dien thoai bat song nhanh
+    adv->setMaxInterval(0x60);                     // ~60ms
     NimBLEDevice::startAdvertising();
     Serial.println("[BLE] Bat dau quang cao");
 }

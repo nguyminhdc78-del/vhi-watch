@@ -248,8 +248,10 @@ class BleService extends ChangeNotifier {
       status = 'Đã kết nối: ${dev.platformName}';
       notifyListeners();
       await syncTime();
-      _startWeatherLoop();   // lay thoi tiet + gui xuong, tu cap nhat moi 30 phut
-      await syncContacts();  // dong bo danh ba nhanh xuong dong ho
+      // Dời việc nặng (thời tiết + danh bạ) ra sau vài giây cho link ổn định truoc
+      Future.delayed(const Duration(seconds: 3), () {
+        if (connected) { _startWeatherLoop(); syncContacts(); }
+      });
     } catch (e) {
       busy = false;
       status = 'Lỗi kết nối: $e';

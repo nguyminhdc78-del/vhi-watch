@@ -266,6 +266,10 @@ class CallListener : NotificationListenerService() {
         // Thong bao thuong (tin nhan Zalo/Mess/SMS/email...) -> chuyen tiep len dong ho
         if (sbn.packageName == packageName) return
         if ((n.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return   // bo thong bao gop
+        // Bo thong bao THUONG TRU (thanh tai, dieu huong... cap nhat lien tuc lam nghen BLE),
+        // tru thong bao nhac (MediaStyle) thi van giu de hien man Nhac.
+        val isMedia = (n.extras.getString(Notification.EXTRA_TEMPLATE) ?: "").contains("MediaStyle")
+        if ((n.flags and Notification.FLAG_ONGOING_EVENT) != 0 && !isMedia) return
         val ex = n.extras
         val title = ex.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
         var text = ex.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
