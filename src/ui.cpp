@@ -131,15 +131,15 @@ static void draw_wf_status() {
 
 // --- Mat 0: so gio LON o giua ---
 static void wf_face_big() {
-    wf_clear_band(86, 82);
+    wf_clear_band(86, 78);
     char tb[8] = "--:--", db[24] = "";
     struct tm tm;
     if (wf_get_time(tm)) {
         snprintf(tb, sizeof(tb), "%02d:%02d", tm.tm_hour, tm.tm_min);
         snprintf(db, sizeof(db), "%s %02d/%02d", WF_WD[tm.tm_wday], tm.tm_mday, tm.tm_mon + 1);
     }
-    display_text_center(120, 94, tb, ui_color565(), 6);
-    display_text_center(120, 144, db, 0xAD55, 2);
+    display_text_center(120, 98, tb, ui_color565(), 4);
+    display_text_center(120, 142, db, 0xAD55, 2);
 }
 
 // --- Mat 1: LICH - ngay to o giua, gio nho o tren ---
