@@ -8,8 +8,8 @@
 #define SCREEN_H            240
 // Xoay man hinh: 0..3. 1.54" ST7789 thuong dung 0 hoac 2.
 #define TFT_ROTATION        0
-// Do sang mac dinh (0..255)
-#define BACKLIGHT_DEFAULT   200
+// Do sang mac dinh (0..255) - de max cho de nhin ngoai troi
+#define BACKLIGHT_DEFAULT   255
 
 // Chan ket noi ST7789 (SPI) - xem so do trong README
 #define PIN_LCD_SCLK        4
