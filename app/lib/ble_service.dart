@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'weather_service.dart';
+import 'smartwatch_service.dart';
 
 // Bo dau tieng Viet (font dong ho khong co dau)
 String vnNoAccent(String s) {
@@ -39,6 +40,13 @@ class BleService extends ChangeNotifier {
         sendCall(a?['name']?.toString() ?? 'Cuoc goi den', a?['app']?.toString() ?? '', true);
       } else if (call.method == 'callEnded') {
         sendCall('', '', false);
+      } else if (call.method == 'notification') {
+        final a = call.arguments as Map?;
+        SmartwatchService.I.handleNotification(
+          a?['pkg']?.toString() ?? '',
+          a?['title']?.toString() ?? '',
+          a?['text']?.toString() ?? '',
+          a?['removed'] == true);
       }
       return null;
     });

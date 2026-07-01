@@ -21,6 +21,7 @@ import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.provider.MediaStore
+import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.view.KeyEvent
@@ -126,6 +127,12 @@ class MainActivity : FlutterActivity() {
                 }
                 "callAnswer" -> { answerCall(); result.success(true) }
                 "callReject" -> { rejectCall(); result.success(true) }
+                "openNotifAccess" -> {
+                    val i = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    startActivity(i)
+                    result.success(true)
+                }
                 else -> result.notImplemented()
             }
         }
@@ -187,9 +194,24 @@ class CallListener : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val n = sbn.notification ?: return
-        if (n.category != Notification.CATEGORY_CALL) return
-        val actions = n.actions ?: return
+        if (n.category == Notification.CATEGORY_CALL) { handleCall(sbn, n); return }
+        // Thong bao thuong (tin nhan Zalo/Mess/SMS/email...) -> chuyen tiep len dong ho
+        if (sbn.packageName == packageName) return
+        val ex = n.extras
+        val title = ex.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
+        var text = ex.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
+        if (text.isEmpty()) text = ex.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString() ?: ""
+        if (text.isEmpty()) {
+            val lines = ex.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)
+            if (lines != null && lines.isNotEmpty()) text = lines.last().toString()
+        }
+        if (title.isEmpty() && text.isEmpty()) return
+        notifyFlutter("notification", mapOf(
+            "pkg" to sbn.packageName, "title" to title, "text" to text, "removed" to false))
+    }
 
+    private fun handleCall(sbn: StatusBarNotification, n: Notification) {
+        val actions = n.actions ?: return
         var ans: PendingIntent? = null
         var dec: PendingIntent? = null
         for (a in actions) {
@@ -203,7 +225,7 @@ class CallListener : NotificationListenerService() {
                 t.contains("dismiss") || t.contains("ignore") || t.contains("ket thuc"))
                 dec = a.actionIntent
         }
-        if (ans == null) return   // khong co nut Nghe -> khong phai cuoc goi den (dang do chuong)
+        if (ans == null) return   // khong co nut Nghe -> chua phai cuoc goi den do chuong
 
         answerPI = ans
         declinePI = dec ?: if (actions.isNotEmpty()) actions[0].actionIntent else null
@@ -217,7 +239,11 @@ class CallListener : NotificationListenerService() {
         if (sbn.key == currentKey) {
             currentKey = null; answerPI = null; declinePI = null
             notifyFlutter("callEnded", null)
+            return
         }
+        if (sbn.packageName == packageName) return
+        notifyFlutter("notification", mapOf(
+            "pkg" to sbn.packageName, "title" to "", "text" to "", "removed" to true))
     }
 
     private fun appLabel(pkg: String): String = try {

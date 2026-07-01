@@ -1,17 +1,15 @@
-import 'dart:async';
-import 'package:notification_listener_service/notification_listener_service.dart';
-import 'package:notification_listener_service/notification_event.dart';
+import 'package:flutter/services.dart';
 import 'ble_service.dart';
 
 // ============================================================
-//  Doc thong bao Android -> chuyen tiep xuong dong ho qua BLE.
-//  Phan biet app nhac (gui sang man Nhac) va thong bao thuong.
+//  Dinh tuyen thong bao (nhan tu native CallListener qua kenh vhi/media)
+//  -> app nhac thi gui sang man Nhac, con lai gui thong bao thuong.
 // ============================================================
 class SmartwatchService {
   SmartwatchService._();
   static final SmartwatchService I = SmartwatchService._();
 
-  StreamSubscription<ServiceNotificationEvent>? _sub;
+  static const _ch = MethodChannel('vhi/media');
 
   // Tu khoa nhan dien app nghe nhac (theo package name)
   static const _musicApps = {
@@ -19,27 +17,24 @@ class SmartwatchService {
     'soundcloud', 'tidal', 'apple.android.music', 'deezer', 'music',
   };
 
-  Future<bool> isGranted() => NotificationListenerService.isPermissionGranted();
-  Future<bool> requestAccess() => NotificationListenerService.requestPermission();
+  void start() {} // thong bao gio den qua BleService (native), khong con dung plugin
 
-  void start() {
-    _sub ??= NotificationListenerService.notificationsStream.listen(_onNotif);
+  // Mo man Cai dat quyen doc thong bao (native)
+  Future<void> requestAccess() async {
+    try { await _ch.invokeMethod('openNotifAccess'); } catch (_) {}
   }
 
-  void _onNotif(ServiceNotificationEvent e) {
+  // Goi tu BleService khi native day thong bao len
+  void handleNotification(String pkg, String title, String text, bool removed) {
     if (!BleService.I.connected) return;
-    final pkg = e.packageName.toLowerCase();
-    final title = e.title;
-    final content = e.content;
-    final removed = e.hasRemoved;
-
-    if (_musicApps.any((m) => pkg.contains(m))) {
-      BleService.I.sendMusic(title, content, !removed);
+    final p = pkg.toLowerCase();
+    if (_musicApps.any((m) => p.contains(m))) {
+      BleService.I.sendMusic(title, text, !removed);
       return;
     }
     if (removed) return;
-    if (title.isEmpty && content.isEmpty) return;
-    BleService.I.sendNotify(_appName(pkg), title, content);
+    if (title.isEmpty && text.isEmpty) return;
+    BleService.I.sendNotify(_appName(p), title, text);
   }
 
   // Rut gon package name -> ten app de doc
@@ -49,8 +44,8 @@ class SmartwatchService {
     if (pkg.contains('whatsapp')) return 'WhatsApp';
     if (pkg.contains('telegram')) return 'Telegram';
     if (pkg.contains('gmail') || (pkg.contains('android.gm'))) return 'Gmail';
-    if (pkg.contains('mms') || pkg.contains('messaging') || pkg.contains('sms')) return 'Tin nhan';
-    if (pkg.contains('dialer') || pkg.contains('incallui') || pkg.contains('phone')) return 'Cuoc goi';
+    if (pkg.contains('mms') || pkg.contains('messaging') || pkg.contains('sms')) return 'Tin nhắn';
+    if (pkg.contains('dialer') || pkg.contains('incallui') || pkg.contains('phone')) return 'Cuộc gọi';
     if (pkg.contains('facebook')) return 'Facebook';
     if (pkg.contains('instagram')) return 'Instagram';
     if (pkg.contains('tiktok')) return 'TikTok';
