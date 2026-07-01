@@ -85,11 +85,10 @@ void loop() {
     // 4) Web server (khi dang upload)
     web_task();
 
-    // 5) Notify trang thai + dam bao dang quang cao ~3s
+    // 5) Notify trang thai ~3s
     if (now - lastStatus >= 3000) {
         lastStatus = now;
         ble_notify_status();
-        ble_ensure_advertising();   // chua ket noi ma ngung phat -> phat lai
     }
 
     // 6) Ghi mau xuong flash (dua ra khoi callback BLE cho an toan)

@@ -171,10 +171,13 @@ class BleService extends ChangeNotifier {
         }
       }
     });
+    try { await FlutterBluePlus.stopScan(); } catch (_) {}   // dung scan cu con ket (neu co)
     try {
-      // Quet TAT CA thiet bi roi loc theo ten "VHI" (chac hon loc theo service UUID,
-      // vi goi quang cao co the khong chua du UUID sau khi them nhieu dac tinh)
-      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 12));
+      // Quet TAT CA thiet bi, che do do tre thap (nhay hon), loc theo ten "VHI"
+      await FlutterBluePlus.startScan(
+        timeout: const Duration(seconds: 10),
+        androidScanMode: AndroidScanMode.lowLatency,
+      );
     } catch (_) {}
 
     BluetoothDevice? dev;
