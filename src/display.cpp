@@ -143,6 +143,22 @@ void display_fill_rect(int x, int y, int w, int h, uint16_t color) {
     lcd.fillRect(x, y, w, h, color);
 }
 
+void display_draw_line(int x0, int y0, int x1, int y1, uint16_t color) {
+    lcd.drawLine(x0, y0, x1, y1, color);
+}
+
+void display_draw_wide_line(int x0, int y0, int x1, int y1, int w, uint16_t color) {
+    lcd.drawWideLine(x0, y0, x1, y1, w, color);
+}
+
+void display_draw_circle(int x, int y, int r, uint16_t color) {
+    lcd.drawCircle(x, y, r, color);
+}
+
+void display_fill_circle(int x, int y, int r, uint16_t color) {
+    lcd.fillCircle(x, y, r, color);
+}
+
 // Ve chu can giua theo chieu ngang (nen trong suot)
 void display_text_center(int cx, int yTop, const char *s, uint16_t color, int size) {
     lcd.setTextSize(size);

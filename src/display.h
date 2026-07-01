@@ -20,3 +20,7 @@ void display_fill(uint16_t color);
 void display_text(int x, int y, const char *s, uint16_t color, uint16_t bg);
 void display_fill_rect(int x, int y, int w, int h, uint16_t color);
 void display_text_center(int cx, int yTop, const char *s, uint16_t color, int size);
+void display_draw_line(int x0, int y0, int x1, int y1, uint16_t color);
+void display_draw_wide_line(int x0, int y0, int x1, int y1, int w, uint16_t color);
+void display_draw_circle(int x, int y, int r, uint16_t color);
+void display_fill_circle(int x, int y, int r, uint16_t color);

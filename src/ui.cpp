@@ -7,6 +7,8 @@
 #include "hid_remote.h"
 #include "display.h"
 #include <time.h>
+#include <math.h>
+#include <LittleFS.h>
 
 // ============================================================
 //  Quan ly man hinh bang 1 state machine don gian.
@@ -75,9 +77,31 @@ static const char* maneuver_symbol(NavManeuver m) {
 // Watchface ve TRUC TIEP (anh nen + gio), nhe RAM
 static int wfLastMin = -2, wfLastStat = -1;
 static bool wfHasWp = false;   // co anh nen hay khong
+static int wfStyle = 0;        // kieu mat dong ho (0=so lon, 1=lich, 2=kim)
+#define WF_STYLE_N 3
+static const char *WF_WD[] = {"CN", "T2", "T3", "T4", "T5", "T6", "T7"};
 
 static uint16_t ui_color565() {
     return ((g_uiR >> 3) << 11) | ((g_uiG >> 2) << 5) | (g_uiB >> 3);
+}
+
+// Nap / luu kieu mat dong ho (LittleFS 1 byte, giu sau khi tat nguon)
+static void wf_load_style() {
+    File f = LittleFS.open("/wfstyle.dat", "r");
+    if (f) { int v = f.read(); if (v >= 0 && v < WF_STYLE_N) wfStyle = v; f.close(); }
+}
+static void wf_save_style() {
+    File f = LittleFS.open("/wfstyle.dat", "w");
+    if (f) { f.write((uint8_t)wfStyle); f.close(); }
+}
+
+// Lay gio hien tai (GMT+7). Tra ve false neu chua dong bo.
+static bool wf_get_time(struct tm &tm) {
+    uint32_t ep = clock_now_epoch();
+    if (!ep) return false;
+    time_t t = (time_t)(ep + 7 * 3600);
+    gmtime_r(&t, &tm);
+    return true;
 }
 
 // Xoa 1 dai ngang: ve lai anh nen neu co, khong thi to den
@@ -94,19 +118,64 @@ static void draw_wf_status() {
     display_text_center(SCREEN_W / 2, 4, s, 0x5E8C, 1);
 }
 
-static void draw_wf_time() {
+// --- Mat 0: so gio LON o giua ---
+static void wf_face_big() {
+    wf_clear_band(86, 82);
     char tb[8] = "--:--", db[24] = "";
-    uint32_t ep = clock_now_epoch();
-    if (ep) {
-        time_t t = (time_t)(ep + 7 * 3600);   // GMT+7
-        struct tm tm; gmtime_r(&t, &tm);
+    struct tm tm;
+    if (wf_get_time(tm)) {
         snprintf(tb, sizeof(tb), "%02d:%02d", tm.tm_hour, tm.tm_min);
-        static const char *wd[] = {"CN", "T2", "T3", "T4", "T5", "T6", "T7"};
-        snprintf(db, sizeof(db), "%s %02d/%02d", wd[tm.tm_wday], tm.tm_mday, tm.tm_mon + 1);
+        snprintf(db, sizeof(db), "%s %02d/%02d", WF_WD[tm.tm_wday], tm.tm_mday, tm.tm_mon + 1);
     }
-    wf_clear_band(86, 82);   // xoa vung gio (giu anh nen)
-    display_text_center(SCREEN_W / 2, 94, tb, ui_color565(), 6);
-    display_text_center(SCREEN_W / 2, 144, db, 0xAD55, 2);
+    display_text_center(120, 94, tb, ui_color565(), 6);
+    display_text_center(120, 144, db, 0xAD55, 2);
+}
+
+// --- Mat 1: LICH - ngay to o giua, gio nho o tren ---
+static void wf_face_date() {
+    wf_clear_band(40, 176);
+    char tb[8] = "--:--", dd[8] = "--/--", wk[8] = "";
+    struct tm tm;
+    if (wf_get_time(tm)) {
+        snprintf(tb, sizeof(tb), "%02d:%02d", tm.tm_hour, tm.tm_min);
+        snprintf(dd, sizeof(dd), "%02d/%02d", tm.tm_mday, tm.tm_mon + 1);
+        snprintf(wk, sizeof(wk), "%s", WF_WD[tm.tm_wday]);
+    }
+    display_text_center(120, 50, tb, ui_color565(), 4);
+    display_text_center(120, 104, dd, 0xFFFF, 5);
+    display_text_center(120, 170, wk, 0xAD55, 3);
+}
+
+// --- Mat 2: KIM (analog) ---
+static void wf_face_analog() {
+    wf_clear_band(24, 216);
+    const int cx = 120, cy = 126, R = 86;
+    uint16_t col = ui_color565();
+    display_draw_circle(cx, cy, R, col);
+    display_draw_circle(cx, cy, R - 1, col);
+    for (int h = 0; h < 12; h++) {            // vach gio
+        float rad = (h * 30 - 90) * DEG_TO_RAD;
+        display_draw_line(cx + cosf(rad) * (R - 2),  cy + sinf(rad) * (R - 2),
+                          cx + cosf(rad) * (R - 11), cy + sinf(rad) * (R - 11), col);
+    }
+    struct tm tm;
+    if (wf_get_time(tm)) {
+        float hdeg = (tm.tm_hour % 12) * 30 + tm.tm_min * 0.5f;
+        float mdeg = tm.tm_min * 6;
+        float hr = (hdeg - 90) * DEG_TO_RAD, mr = (mdeg - 90) * DEG_TO_RAD;
+        display_draw_wide_line(cx, cy, cx + cosf(hr) * (R * 0.5f), cy + sinf(hr) * (R * 0.5f), 5, 0xFFFF);
+        display_draw_wide_line(cx, cy, cx + cosf(mr) * (R * 0.78f), cy + sinf(mr) * (R * 0.78f), 3, col);
+        char dd[16];
+        snprintf(dd, sizeof(dd), "%s %02d/%02d", WF_WD[tm.tm_wday], tm.tm_mday, tm.tm_mon + 1);
+        display_text_center(120, 222, dd, 0xAD55, 2);
+    }
+    display_fill_circle(cx, cy, 4, 0xFFFF);
+}
+
+static void draw_wf_time() {
+    if (wfStyle == 2)      wf_face_analog();
+    else if (wfStyle == 1) wf_face_date();
+    else                   wf_face_big();
 }
 
 static void draw_wf_full() {
@@ -115,12 +184,13 @@ static void draw_wf_full() {
     draw_wf_status();
     draw_wf_time();
     if (!wfHasWp)
-        display_text_center(SCREEN_W / 2, 224, "Nhan B = Menu", 0x8410, 1);
+        display_text_center(SCREEN_W / 2, 228, "A: doi mat   B: menu", 0x8410, 1);
 }
 
 static void build_watchface(lv_obj_t *scr) {
     (void)scr;
     display_set_raw(true);            // ve thang ra man (nhe RAM, ho tro anh nen)
+    wf_load_style();
     wfLastMin = -2; wfLastStat = -1;
     draw_wf_full();
 }
@@ -562,6 +632,11 @@ static void key_handler(lv_event_t *e) {
     switch (g_cur) {
         case SCR_WATCH:
             if (key == LV_KEY_ENTER) request_screen(SCR_MENU);
+            else if (key == LV_KEY_DOWN) {          // A: doi mat dong ho
+                wfStyle = (wfStyle + 1) % WF_STYLE_N;
+                wf_save_style();
+                draw_wf_full();
+            }
             break;
 
         case SCR_MENU:
