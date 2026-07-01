@@ -1,12 +1,39 @@
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../ble_service.dart';
 
 // ============================================================
 //  Danh ba nhanh: chon nguoi hay goi -> dong bo xuong dong ho.
 //  Tren dong ho vao menu "Goi dien" chon nguoi + bam goi.
 // ============================================================
-class QuickCallScreen extends StatelessWidget {
+class QuickCallScreen extends StatefulWidget {
   const QuickCallScreen({super.key});
+  @override
+  State<QuickCallScreen> createState() => _QuickCallScreenState();
+}
+
+class _QuickCallScreenState extends State<QuickCallScreen> {
+  bool _callGranted = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkPerm();
+  }
+
+  Future<void> _checkPerm() async {
+    final st = await Permission.phone.status;
+    if (mounted) setState(() => _callGranted = st.isGranted);
+  }
+
+  Future<void> _grantCall() async {
+    var st = await Permission.phone.request();
+    if (st.isPermanentlyDenied) {
+      await openAppSettings();
+      st = await Permission.phone.status;
+    }
+    if (mounted) setState(() => _callGranted = st.isGranted);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -17,6 +44,31 @@ class QuickCallScreen extends StatelessWidget {
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            if (!_callGranted)
+              Card(
+                color: Colors.orange.withOpacity(0.15),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Bật gọi trực tiếp',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Chưa cấp quyền Điện thoại nên bấm gọi từ đồng hồ chỉ mở màn quay số. Cấp quyền để nó gọi thẳng.',
+                        style: TextStyle(color: Colors.grey[300], fontSize: 13),
+                      ),
+                      const SizedBox(height: 10),
+                      FilledButton.icon(
+                        onPressed: _grantCall,
+                        icon: const Icon(Icons.phone_enabled),
+                        label: const Text('Cấp quyền gọi trực tiếp'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
