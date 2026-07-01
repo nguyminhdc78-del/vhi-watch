@@ -1,5 +1,9 @@
 package com.vhitek.vhi_watch
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
@@ -7,6 +11,7 @@ import android.media.AudioManager
 import android.media.Ringtone
 import android.media.RingtoneManager
 import android.os.Build
+import android.os.IBinder
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.provider.MediaStore
@@ -78,8 +83,54 @@ class MainActivity : FlutterActivity() {
                     } catch (_: Exception) {}
                     result.success(true)
                 }
+                "startService" -> {
+                    val i = Intent(this, WatchService::class.java)
+                    if (Build.VERSION.SDK_INT >= 26) startForegroundService(i) else startService(i)
+                    result.success(true)
+                }
+                "stopService" -> {
+                    stopService(Intent(this, WatchService::class.java))
+                    result.success(true)
+                }
                 else -> result.notImplemented()
             }
         }
+    }
+}
+
+// ============================================================
+//  Dich vu nen ben bi: giu ket noi Bluetooth dong ho khi app chay nen
+//  (giong cach smartwatch that lam - co 1 thong bao thuong tru nho, im lang)
+// ============================================================
+class WatchService : Service() {
+    companion object {
+        const val CHANNEL_ID = "vhi_watch_bg"
+        const val NOTI_ID = 1001
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        startForeground(NOTI_ID, buildNotification())
+        return START_STICKY   // he thong giet -> tu bat lai
+    }
+
+    private fun buildNotification(): Notification {
+        if (Build.VERSION.SDK_INT >= 26) {
+            val ch = NotificationChannel(CHANNEL_ID, "VHI Watch nen",
+                NotificationManager.IMPORTANCE_MIN)   // do uu tien thap nhat -> im lang, gap gon
+            ch.setShowBadge(false)
+            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                .createNotificationChannel(ch)
+        }
+        @Suppress("DEPRECATION")
+        val builder = if (Build.VERSION.SDK_INT >= 26)
+            Notification.Builder(this, CHANNEL_ID) else Notification.Builder(this)
+        return builder
+            .setContentTitle("VHI Watch")
+            .setContentText("Dang giu ket noi dong ho")
+            .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
+            .setOngoing(true)
+            .build()
     }
 }

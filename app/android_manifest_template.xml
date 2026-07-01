@@ -26,6 +26,11 @@
     <!-- Tim dien thoai: rung -->
     <uses-permission android:name="android.permission.VIBRATE"/>
 
+    <!-- Dich vu nen ben bi (giu ket noi dong ho khi app chay nen) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
     <application
         android:label="VHI Watch"
         android:name="${applicationName}"
@@ -62,6 +67,12 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+
+        <!-- Dich vu nen giu ket noi Bluetooth (Foreground Service) -->
+        <service
+            android:name=".WatchService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice"/>
     </application>
 
     <queries>

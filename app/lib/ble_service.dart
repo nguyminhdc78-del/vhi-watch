@@ -68,13 +68,18 @@ class BleService extends ChangeNotifier {
       Permission.bluetoothScan,
       Permission.bluetoothConnect,
       Permission.locationWhenInUse,
+      Permission.notification,   // Android 13+: de hien thong bao dich vu nen
     ].request();
-    return res.values.every((s) => s.isGranted || s.isLimited);
+    // Chi bat buoc quyen Bluetooth; quyen thong bao khong co van chay duoc
+    return (res[Permission.bluetoothScan]?.isGranted ?? false) &&
+           (res[Permission.bluetoothConnect]?.isGranted ?? false);
   }
 
-  // Goi khi mo app: tu dong tim & ket noi dong ho, va ket noi lai moi khi mat song.
+  // Goi khi mo app: bat dich vu nen ben bi + tu dong tim & ket noi dong ho,
+  // va ket noi lai moi khi mat song (giu ket noi ca khi app chay nen).
   void autoConnectStart() {
     autoReconnect = true;
+    _mediaCh.invokeMethod('startService').catchError((_) {});   // giu ket noi khi app o nen
     connect();
   }
 
@@ -319,6 +324,7 @@ class BleService extends ChangeNotifier {
   Future<void> disconnect() async {
     autoReconnect = false;          // nguoi dung chu dong ngat -> khong tu ket noi lai
     _reconnectTimer?.cancel();
+    _mediaCh.invokeMethod('stopService').catchError((_) {});   // tat dich vu nen
     try {
       await _statSub?.cancel();
       await _connSub?.cancel();
