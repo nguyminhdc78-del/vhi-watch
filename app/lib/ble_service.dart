@@ -172,10 +172,9 @@ class BleService extends ChangeNotifier {
       }
     });
     try {
-      await FlutterBluePlus.startScan(
-        withServices: [Guid(_svc)],
-        timeout: const Duration(seconds: 10),
-      );
+      // Quet TAT CA thiet bi roi loc theo ten "VHI" (chac hon loc theo service UUID,
+      // vi goi quang cao co the khong chua du UUID sau khi them nhieu dac tinh)
+      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 12));
     } catch (_) {}
 
     BluetoothDevice? dev;
