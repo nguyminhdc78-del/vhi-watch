@@ -984,6 +984,12 @@ static void show_screen(Screen s) {
 // ============================================================
 void ui_init(lv_group_t *group) {
     g_group = group;
+    // Nap mau chu da luu (giu sau khi tat nguon)
+    File cf = LittleFS.open("/uicolor.dat", "r");
+    if (cf) {
+        if (cf.size() >= 3) { g_uiR = cf.read(); g_uiG = cf.read(); g_uiB = cf.read(); }
+        cf.close();
+    }
     show_screen(SCR_WATCH);
 }
 

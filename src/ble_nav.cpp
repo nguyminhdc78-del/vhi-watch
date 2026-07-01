@@ -155,6 +155,9 @@ class ColorCB : public NimBLECharacteristicCallbacks {
             g_uiG = (uint8_t)v[1];
             g_uiB = (uint8_t)v[2];
             g_colorChanged = true;
+            // Luu lai de giu mau sau khi tat/mo nguon
+            File f = LittleFS.open("/uicolor.dat", "w");
+            if (f) { uint8_t rgb[3] = {g_uiR, g_uiG, g_uiB}; f.write(rgb, 3); f.close(); }
         }
     }
 };
