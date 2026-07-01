@@ -4,11 +4,14 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.Manifest
+import android.app.Activity
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.ContactsContract
 import android.telecom.TelecomManager
 import android.media.AudioAttributes
 import android.media.AudioManager
@@ -38,6 +41,28 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         var mediaChannel: MethodChannel? = null   // de dich vu nen goi nguoc ve Flutter
+    }
+
+    private var pendingPick: MethodChannel.Result? = null
+    private val REQ_PICK = 7001
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQ_PICK) return
+        val res = pendingPick; pendingPick = null
+        if (resultCode == Activity.RESULT_OK && data?.data != null) {
+            try {
+                contentResolver.query(data.data!!, arrayOf(
+                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                    ContactsContract.CommonDataKinds.Phone.NUMBER), null, null, null)?.use {
+                    if (it.moveToFirst()) {
+                        res?.success(mapOf("name" to (it.getString(0) ?: ""), "number" to (it.getString(1) ?: "")))
+                        return
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+        res?.success(null)
     }
 
     private fun hasAnswerPerm(): Boolean =
@@ -132,6 +157,25 @@ class MainActivity : FlutterActivity() {
                     i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     startActivity(i)
                     result.success(true)
+                }
+                "pickContact" -> {
+                    pendingPick = result
+                    try {
+                        startActivityForResult(
+                            Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI),
+                            REQ_PICK)
+                    } catch (e: Exception) { pendingPick = null; result.success(null) }
+                }
+                "dialNumber" -> {
+                    val num = call.argument<String>("number") ?: ""
+                    val action = if (checkSelfPermission(Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED)
+                        Intent.ACTION_CALL else Intent.ACTION_DIAL
+                    try {
+                        val i = Intent(action, Uri.parse("tel:" + Uri.encode(num)))
+                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        startActivity(i)
+                        result.success(true)
+                    } catch (e: Exception) { result.success(false) }
                 }
                 else -> result.notImplemented()
             }

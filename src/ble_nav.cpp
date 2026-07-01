@@ -196,6 +196,24 @@ class CallCB : public NimBLECharacteristicCallbacks {
     }
 };
 
+// Danh ba nhanh: "C" = xoa het; "ten\tso" = them 1 lien he
+class ContactsCB : public NimBLECharacteristicCallbacks {
+    void onWrite(NimBLECharacteristic *c) override {
+        std::string v = c->getValue();
+        if (v.size() == 1 && v[0] == 'C') {          // xoa danh sach (bat dau dong bo)
+            g_contacts.count = 0; g_contacts.updated = true; return;
+        }
+        size_t tab = v.find('\t');
+        if (tab == std::string::npos) return;
+        if (g_contacts.count >= MAX_CONTACTS) return;
+        Contact &ct = g_contacts.items[g_contacts.count];
+        strlcpy(ct.name,   v.substr(0, tab).c_str(),  sizeof(ct.name));
+        strlcpy(ct.number, v.substr(tab + 1).c_str(), sizeof(ct.number));
+        g_contacts.count++;
+        g_contacts.updated = true;
+    }
+};
+
 static NimBLECharacteristic *chrMedia = nullptr;
 
 void ble_init() {
@@ -260,6 +278,11 @@ void ble_init() {
         svc->createCharacteristic(BLE_CHR_CALL_UUID,
                                   NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
     chrCall->setCallbacks(new CallCB());
+
+    NimBLECharacteristic *chrContact =
+        svc->createCharacteristic(BLE_CHR_CONTACT_UUID,
+                                  NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
+    chrContact->setCallbacks(new ContactsCB());
 
     svc->start();
 

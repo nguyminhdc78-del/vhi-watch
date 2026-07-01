@@ -94,6 +94,19 @@ struct CallState {
 };
 extern CallState g_call;
 
+// --- Danh ba nhanh de goi tu dong ho ---
+#define MAX_CONTACTS 12
+struct Contact {
+    char name[28]   = "";
+    char number[20] = "";
+};
+struct ContactBook {
+    Contact items[MAX_CONTACTS];
+    int  count = 0;
+    volatile bool updated = false;
+};
+extern ContactBook g_contacts;
+
 // Moc thoi gian co hoat dong gan nhat (nut bam / thong bao) - de tinh idle -> deep sleep
 extern volatile uint32_t g_lastInputMs;
 

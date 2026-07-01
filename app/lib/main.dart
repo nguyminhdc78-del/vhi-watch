@@ -4,6 +4,7 @@ import 'ble_service.dart';
 import 'smartwatch_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/wallpaper_screen.dart';
+import 'screens/quick_call_screen.dart';
 
 void main() => runApp(const VhiApp());
 
@@ -28,7 +29,7 @@ class RootPage extends StatefulWidget {
 
 class _RootPageState extends State<RootPage> {
   int _idx = 0;
-  final _pages = const [HomeScreen(), WallpaperScreen()];
+  final _pages = const [HomeScreen(), QuickCallScreen(), WallpaperScreen()];
 
   @override
   void initState() {
@@ -69,6 +70,7 @@ class _RootPageState extends State<RootPage> {
         onDestinationSelected: (i) => setState(() => _idx = i),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.watch), label: 'Trang chủ'),
+          NavigationDestination(icon: Icon(Icons.call), label: 'Gọi nhanh'),
           NavigationDestination(icon: Icon(Icons.image), label: 'Ảnh nền'),
         ],
       ),

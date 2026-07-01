@@ -21,7 +21,7 @@ LV_FONT_DECLARE(vn_font_20);
 //    NEXT/PREV = di chuyen, ENTER = chon, ESC = quay lai
 // ============================================================
 
-enum Screen { SCR_WATCH, SCR_MENU, SCR_NAV, SCR_UPLOAD, SCR_NOTIFY, SCR_MUSIC, SCR_REMOTE, SCR_CAMERA, SCR_QR, SCR_FIND, SCR_TIMER, SCR_CALL };
+enum Screen { SCR_WATCH, SCR_MENU, SCR_NAV, SCR_UPLOAD, SCR_NOTIFY, SCR_MUSIC, SCR_REMOTE, SCR_CAMERA, SCR_QR, SCR_FIND, SCR_TIMER, SCR_CALL, SCR_DIAL };
 
 static lv_group_t *g_group   = nullptr;
 static lv_obj_t   *g_scr     = nullptr;   // man hinh hien tai
@@ -49,8 +49,9 @@ static const char *MENU_ITEMS[] = { LV_SYMBOL_BELL    " Thong bao",
                                     LV_SYMBOL_IMAGE   " Doi anh nen",
                                     LV_SYMBOL_CALL    " Tim dien thoai",
                                     LV_SYMBOL_LOOP    " Bam gio",
+                                    LV_SYMBOL_CALL    " Goi dien",
                                     LV_SYMBOL_SETTINGS " Cai dat" };
-static const int   MENU_N = 9;
+static const int   MENU_N = 10;
 static int         menuSel = 0;
 static lv_obj_t   *menuBtns[MENU_N];
 
@@ -61,6 +62,10 @@ static int  g_pendingScreen = -1;
 static void tmr_toggle();
 static void tmr_reset();
 static void tmr_cycle();
+static void dial_refresh();
+static int  dialSel = 0;
+static lv_obj_t *dialBtns[MAX_CONTACTS];
+static lv_obj_t *lblDialInfo = nullptr;
 
 // ---------- tien ich ----------
 static lv_obj_t* make_root() {
@@ -257,7 +262,8 @@ static void menu_activate() {
         case 5: request_screen(SCR_UPLOAD); break;
         case 6: request_screen(SCR_FIND);   break;
         case 7: request_screen(SCR_TIMER);  break;
-        case 8: /* TODO: cai dat */         break;
+        case 8: request_screen(SCR_DIAL);   break;
+        case 9: /* TODO: cai dat */         break;
     }
 }
 
@@ -716,6 +722,24 @@ static void key_handler(lv_event_t *e) {
             else if (key == LV_KEY_ENTER) { ble_send_media("call_answer"); g_call.ringing = false; request_screen(SCR_WATCH); } // B: nghe
             else if (key == LV_KEY_ESC)   request_screen(SCR_WATCH);   // C: bo qua
             break;
+
+        case SCR_DIAL:
+            if (g_contacts.count > 0) {
+                if (key == LV_KEY_DOWN)      { dialSel = (dialSel + 1) % g_contacts.count; dial_refresh(); }
+                else if (key == LV_KEY_UP)   { dialSel = (dialSel - 1 + g_contacts.count) % g_contacts.count; dial_refresh(); }
+                else if (key == LV_KEY_ENTER) {                     // B: goi
+                    char cmd[40];
+                    snprintf(cmd, sizeof(cmd), "dial:%s", g_contacts.items[dialSel].number);
+                    ble_send_media(cmd);
+                    if (lblDialInfo) {
+                        char m[48]; snprintf(m, sizeof(m), "Dang goi %s...", g_contacts.items[dialSel].name);
+                        lv_label_set_text(lblDialInfo, m);
+                        lv_obj_set_style_text_color(lblDialInfo, lv_color_hex(0x33CC66), 0);
+                    }
+                }
+            }
+            if (key == LV_KEY_ESC) request_screen(SCR_MENU);        // C: thoat
+            break;
     }
 }
 
@@ -837,6 +861,66 @@ static void build_call(lv_obj_t *scr) {
 }
 
 // ============================================================
+//  GOI DIEN (danh ba nhanh dong bo tu app)
+// ============================================================
+static void dial_refresh() {
+    for (int i = 0; i < g_contacts.count; i++)
+        lv_obj_set_style_bg_color(dialBtns[i],
+            i == dialSel ? lv_color_hex(0x2266FF) : lv_color_hex(0x222222), 0);
+    if (g_contacts.count > 0) lv_obj_scroll_to_view(dialBtns[dialSel], LV_ANIM_ON);
+}
+
+static void build_dial(lv_obj_t *scr) {
+    if (dialSel >= g_contacts.count) dialSel = 0;
+
+    if (g_contacts.count == 0) {
+        lv_obj_t *l = lv_label_create(scr);
+        lv_obj_set_style_text_font(l, &vn_font_16, 0);
+        lv_obj_set_style_text_color(l, lv_color_hex(0xCCCCCC), 0);
+        lv_obj_set_width(l, 210);
+        lv_label_set_long_mode(l, LV_LABEL_LONG_WRAP);
+        lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
+        lv_label_set_text(l, "Chua co danh ba.\nMo app -> tab Goi nhanh de them.");
+        lv_obj_center(l);
+        return;
+    }
+
+    lv_obj_t *title = lv_label_create(scr);
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(title, lv_color_hex(0x33CC66), 0);
+    lv_label_set_text(title, LV_SYMBOL_CALL " Goi dien");
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 6);
+
+    lv_obj_t *list = lv_obj_create(scr);
+    lv_obj_set_size(list, 224, 166);
+    lv_obj_align(list, LV_ALIGN_TOP_MID, 0, 30);
+    lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_bg_color(list, lv_color_black(), 0);
+    lv_obj_set_style_border_width(list, 0, 0);
+    lv_obj_set_style_pad_row(list, 6, 0);
+    for (int i = 0; i < g_contacts.count; i++) {
+        lv_obj_t *btn = lv_obj_create(list);
+        lv_obj_set_size(btn, lv_pct(100), 40);
+        lv_obj_set_style_radius(btn, 6, 0);
+        lv_obj_set_style_border_width(btn, 0, 0);
+        lv_obj_clear_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_t *l = lv_label_create(btn);
+        lv_obj_set_style_text_font(l, &vn_font_16, 0);
+        lv_obj_set_style_text_color(l, lv_color_white(), 0);
+        lv_label_set_text(l, g_contacts.items[i].name);
+        lv_obj_align(l, LV_ALIGN_LEFT_MID, 6, 0);
+        dialBtns[i] = btn;
+    }
+
+    lblDialInfo = lv_label_create(scr);
+    lv_obj_set_style_text_font(lblDialInfo, &vn_font_16, 0);
+    lv_obj_set_style_text_color(lblDialInfo, lv_color_hex(0xE5A23B), 0);
+    lv_label_set_text(lblDialInfo, "A: chon   B: GOI   C: thoat");
+    lv_obj_align(lblDialInfo, LV_ALIGN_BOTTOM_MID, 0, -6);
+    dial_refresh();
+}
+
+// ============================================================
 //  Chuyen man hinh
 // ============================================================
 static void show_screen(Screen s) {
@@ -848,6 +932,7 @@ static void show_screen(Screen s) {
     // reset con tro label
     lblTime = lblDate = lblStat = nullptr;
     lblTmrTime = lblTmrMode = nullptr;
+    lblDialInfo = nullptr;
     navArrow = navDist = navStreet = navEta = nullptr;
     navLine = navDot = nullptr;
     lblNApp = lblNTitle = lblNText = nullptr;
@@ -877,6 +962,7 @@ static void show_screen(Screen s) {
         case SCR_FIND:   build_find(g_scr);      break;
         case SCR_TIMER:  build_timer(g_scr);     break;
         case SCR_CALL:   build_call(g_scr);      break;
+        case SCR_DIAL:   build_dial(g_scr);      break;
     }
 
     lv_scr_load(g_scr);
@@ -921,6 +1007,12 @@ void ui_tick() {
         g_call.changed = false;
         if (g_call.ringing && g_cur != SCR_CALL) request_screen(SCR_CALL);
         else if (!g_call.ringing && g_cur == SCR_CALL) request_screen(SCR_WATCH);
+    }
+
+    // Danh ba vua dong bo -> ve lai man goi dien neu dang mo
+    if (g_contacts.updated) {
+        g_contacts.updated = false;
+        if (g_cur == SCR_DIAL) request_screen(SCR_DIAL);
     }
 
     // Co thong bao moi -> tu mo man Thong bao (khi dang o man dong ho, khong phai luc co cuoc goi)

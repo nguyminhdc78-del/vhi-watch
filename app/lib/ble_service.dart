@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'weather_service.dart';
 import 'smartwatch_service.dart';
 
@@ -67,11 +68,16 @@ class BleService extends ChangeNotifier {
   static const _imgselUuid = "6e40000b-b5a3-f393-e0a9-e50e24dcca9e";
   static const _weatherUuid = "6e40000c-b5a3-f393-e0a9-e50e24dcca9e";
   static const _callUuid    = "6e40000d-b5a3-f393-e0a9-e50e24dcca9e";
+  static const _contactUuid = "6e40000e-b5a3-f393-e0a9-e50e24dcca9e";
 
   static const _mediaCh = MethodChannel('vhi/media'); // gui phim media Android
 
   BluetoothDevice? _device;
-  BluetoothCharacteristic? _nav, _time, _stat, _wp, _route, _notify, _music, _media, _color, _imgsel, _weather, _call;
+  BluetoothCharacteristic? _nav, _time, _stat, _wp, _route, _notify, _music, _media, _color, _imgsel, _weather, _call, _contact;
+
+  // Danh ba nhanh (goi tu dong ho). Moi item: {'name':.., 'number':..}
+  List<Map<String, String>> favorites = [];
+  static const int maxFavorites = 12;
   StreamSubscription<BluetoothConnectionState>? _connSub;
   StreamSubscription<List<ScanResult>>? _scanSub;
   StreamSubscription<List<int>>? _statSub;
@@ -113,6 +119,7 @@ class BleService extends ChangeNotifier {
   // va ket noi lai moi khi mat song (giu ket noi ca khi app chay nen).
   void autoConnectStart() {
     autoReconnect = true;
+    loadFavorites();   // nap danh ba nhanh da luu
     _mediaCh.invokeMethod('startService').catchError((_) {});   // giu ket noi khi app o nen
     connect();
   }
@@ -220,6 +227,7 @@ class BleService extends ChangeNotifier {
             else if (u == _imgselUuid) _imgsel = c;
             else if (u == _weatherUuid) _weather = c;
             else if (u == _callUuid) _call = c;
+            else if (u == _contactUuid) _contact = c;
           }
         }
       }
@@ -242,6 +250,7 @@ class BleService extends ChangeNotifier {
       notifyListeners();
       await syncTime();
       _startWeatherLoop();   // lay thoi tiet + gui xuong, tu cap nhat moi 30 phut
+      await syncContacts();  // dong bo danh ba nhanh xuong dong ho
     } catch (e) {
       busy = false;
       status = 'Lỗi kết nối: $e';
@@ -263,7 +272,7 @@ class BleService extends ChangeNotifier {
     connected = false;
     _mediaSub?.cancel();
     _weatherTimer?.cancel();
-    _nav = _time = _stat = _wp = _route = _notify = _music = _media = _color = _imgsel = _weather = _call = null;
+    _nav = _time = _stat = _wp = _route = _notify = _music = _media = _color = _imgsel = _weather = _call = _contact = null;
     status = autoReconnect ? 'Mất kết nối - đang kết nối lại...' : 'Mất kết nối';
     notifyListeners();
     _scheduleReconnect();   // tu dong ket noi lai (vd dong ho ngu/bat lai)
@@ -289,6 +298,12 @@ class BleService extends ChangeNotifier {
     // Cuoc goi: dong ho bam Nghe / Tu choi -> ban lai nut cua app dang goi
     if (cmd == 'call_answer') { _mediaCh.invokeMethod('callAnswer').catchError((_) {}); return; }
     if (cmd == 'call_reject') { _mediaCh.invokeMethod('callReject').catchError((_) {}); return; }
+    // Goi tu dong ho: "dial:<so>" -> dien thoai tu quay so
+    if (cmd.startsWith('dial:')) {
+      final num = cmd.substring(5);
+      _mediaCh.invokeMethod('dialNumber', {'number': num}).catchError((_) {});
+      return;
+    }
     // Lenh nhac -> bam phim media he thong
     int code = 0;
     if (cmd == 'next') code = 87;          // KEYCODE_MEDIA_NEXT
@@ -344,6 +359,71 @@ class BleService extends ChangeNotifier {
         ? jsonEncode({'st': 1, 'name': _clipBytes(name, 88), 'app': _clipBytes(app, 28)})
         : jsonEncode({'st': 0});
     try { await _call!.write(utf8.encode(js), withoutResponse: true); } catch (_) {}
+  }
+
+  // --- Danh ba nhanh ---
+  Future<void> loadFavorites() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      final raw = sp.getString('favorites');
+      if (raw != null) {
+        final list = jsonDecode(raw) as List;
+        favorites = list.map((e) => {
+          'name': (e['name'] ?? '').toString(),
+          'number': (e['number'] ?? '').toString(),
+        }).toList();
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveFavorites() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      await sp.setString('favorites', jsonEncode(favorites));
+    } catch (_) {}
+  }
+
+  Future<void> addFavorite(String name, String number) async {
+    name = name.trim();
+    number = number.replaceAll(RegExp(r'[^0-9+]'), ''); // chi giu so va dau +
+    if (name.isEmpty || number.isEmpty) return;
+    if (favorites.length >= maxFavorites) return;
+    favorites.add({'name': name, 'number': number});
+    await _saveFavorites();
+    notifyListeners();
+    await syncContacts();
+  }
+
+  Future<void> removeFavorite(int i) async {
+    if (i < 0 || i >= favorites.length) return;
+    favorites.removeAt(i);
+    await _saveFavorites();
+    notifyListeners();
+    await syncContacts();
+  }
+
+  // Gui toan bo danh ba nhanh xuong dong ho ("C" xoa het, roi tung "ten\tso")
+  Future<void> syncContacts() async {
+    if (_contact == null) return;
+    try {
+      await _contact!.write(utf8.encode('C'), withoutResponse: false);
+      for (final f in favorites) {
+        final line = '${_clipBytes(f['name'] ?? '', 26)}\t${f['number']}';
+        await _contact!.write(utf8.encode(line), withoutResponse: false);
+        await Future.delayed(const Duration(milliseconds: 25));
+      }
+    } catch (_) {}
+  }
+
+  // Chon 1 lien he tu danh ba dien thoai (native contact picker)
+  Future<void> pickFromContacts() async {
+    try {
+      final r = await _mediaCh.invokeMethod('pickContact');
+      if (r is Map) {
+        await addFavorite(r['name']?.toString() ?? '', r['number']?.toString() ?? '');
+      }
+    } catch (_) {}
   }
 
 
