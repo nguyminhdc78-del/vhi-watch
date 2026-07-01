@@ -17,7 +17,11 @@
 #include "app_state.h"
 #include "esp_sleep.h"
 #include "driver/gpio.h"
+#include "esp_task_wdt.h"
 #include <LittleFS.h>
+
+// Watchdog: neu loop() treo qua bao lau (giay) -> tu reset chip (khong can nut RESET)
+#define WDT_TIMEOUT_S   15
 
 static uint32_t lastLvgl = 0, lastUi = 0, lastStatus = 0;
 static bool s_screenOff = false;   // man hinh dang tat de tiet kiem pin
@@ -36,11 +40,17 @@ void setup() {
     web_on_wallpaper_updated(ui_reload_wallpaper);
 
     g_lastInputMs = millis();       // bat dau dem idle
+
+    // Watchdog: canh chung loopTask, treo qua WDT_TIMEOUT_S -> panic + tu reset
+    esp_task_wdt_init(WDT_TIMEOUT_S, true);
+    esp_task_wdt_add(NULL);
     Serial.println("=== San sang ===");
 }
 
 void loop() {
     uint32_t now = millis();
+
+    esp_task_wdt_reset();   // "cho watchdog an" -> bao loop van chay binh thuong
 
     // 1) Quet nut nhan
     buttons_task();
