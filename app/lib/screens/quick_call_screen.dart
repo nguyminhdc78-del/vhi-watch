@@ -12,18 +12,32 @@ class QuickCallScreen extends StatefulWidget {
   State<QuickCallScreen> createState() => _QuickCallScreenState();
 }
 
-class _QuickCallScreenState extends State<QuickCallScreen> {
+class _QuickCallScreenState extends State<QuickCallScreen> with WidgetsBindingObserver {
   bool _callGranted = false;
+  bool _overlay = true;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _checkPerm();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _checkPerm();   // quay lai app -> kiem tra lai quyen
   }
 
   Future<void> _checkPerm() async {
     final ok = await BleService.I.hasCallPermission();   // kiem tra chinh xac o tang he thong
-    if (mounted) setState(() => _callGranted = ok);
+    final ov = await BleService.I.hasOverlay();
+    if (mounted) setState(() { _callGranted = ok; _overlay = ov; });
   }
 
   Future<void> _grantCall() async {
@@ -77,6 +91,31 @@ class _QuickCallScreenState extends State<QuickCallScreen> {
                         onPressed: _grantCall,
                         icon: const Icon(Icons.phone_enabled),
                         label: const Text('Cấp quyền gọi trực tiếp'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            if (!_overlay)
+              Card(
+                color: Colors.orange.withOpacity(0.15),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Cho phép gọi khi màn hình tắt',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Bật "Hiển thị trên ứng dụng khác" để đồng hồ gọi được cả khi điện thoại trong túi / màn tắt. Không bật thì chỉ gọi khi app đang mở.',
+                        style: TextStyle(color: Colors.grey[300], fontSize: 13),
+                      ),
+                      const SizedBox(height: 10),
+                      FilledButton.icon(
+                        onPressed: () async { await BleService.I.openOverlay(); },
+                        icon: const Icon(Icons.open_in_new),
+                        label: const Text('Mở cài đặt & bật'),
                       ),
                     ],
                   ),

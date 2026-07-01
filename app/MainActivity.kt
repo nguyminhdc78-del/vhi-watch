@@ -172,14 +172,33 @@ class MainActivity : FlutterActivity() {
                 }
                 "dialNumber" -> {
                     val num = call.argument<String>("number") ?: ""
-                    val action = if (checkSelfPermission(Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED)
-                        Intent.ACTION_CALL else Intent.ACTION_DIAL
+                    val uri = Uri.parse("tel:" + Uri.encode(num))
+                    var ok = false
+                    if (checkSelfPermission(Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
+                        // 1) placeCall: goi thang qua he thong, chay ca khi app o nen
+                        try {
+                            (getSystemService(Context.TELECOM_SERVICE) as TelecomManager).placeCall(uri, null)
+                            ok = true
+                        } catch (_: Exception) {}
+                        // 2) du phong: mo cuoc goi bang intent
+                        if (!ok) try {
+                            startActivity(Intent(Intent.ACTION_CALL, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                            ok = true
+                        } catch (_: Exception) {}
+                    }
+                    if (!ok) try {
+                        startActivity(Intent(Intent.ACTION_DIAL, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        ok = true
+                    } catch (_: Exception) {}
+                    result.success(ok)
+                }
+                "hasOverlay" -> result.success(Settings.canDrawOverlays(this))
+                "openOverlay" -> {
                     try {
-                        val i = Intent(action, Uri.parse("tel:" + Uri.encode(num)))
-                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        startActivity(i)
-                        result.success(true)
-                    } catch (e: Exception) { result.success(false) }
+                        startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse("package:$packageName")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    } catch (_: Exception) {}
+                    result.success(true)
                 }
                 else -> result.notImplemented()
             }

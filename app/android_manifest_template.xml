@@ -33,6 +33,8 @@
     <!-- Goi dien tu dong ho + chon danh ba -->
     <uses-permission android:name="android.permission.CALL_PHONE"/>
     <uses-permission android:name="android.permission.READ_CONTACTS"/>
+    <!-- De bat cuoc goi khi app dang chay nen / man hinh tat -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
 
     <!-- Dich vu nen ben bi (giu ket noi dong ho khi app chay nen) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>

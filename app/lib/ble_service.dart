@@ -424,6 +424,17 @@ class BleService extends ChangeNotifier {
     } catch (_) { return false; }
   }
 
+  // Quyen "Hien thi tren app khac" (de bat cuoc goi khi app o nen)
+  Future<bool> hasOverlay() async {
+    try {
+      final r = await _mediaCh.invokeMethod('hasOverlay');
+      return r == true;
+    } catch (_) { return false; }
+  }
+  Future<void> openOverlay() async {
+    try { await _mediaCh.invokeMethod('openOverlay'); } catch (_) {}
+  }
+
   // Chon 1 lien he tu danh ba dien thoai (native contact picker)
   Future<void> pickFromContacts() async {
     try {
