@@ -26,6 +26,10 @@
     <!-- Tim dien thoai: rung -->
     <uses-permission android:name="android.permission.VIBRATE"/>
 
+    <!-- Nghe/tu choi cuoc goi tu dong ho -->
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS"/>
+    <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
+
     <!-- Dich vu nen ben bi (giu ket noi dong ho khi app chay nen) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>

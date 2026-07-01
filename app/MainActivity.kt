@@ -3,10 +3,13 @@ package com.vhitek.vhi_watch
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.Manifest
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.telecom.TelecomManager
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.Ringtone
@@ -34,6 +37,24 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         var mediaChannel: MethodChannel? = null   // de dich vu nen goi nguoc ve Flutter
+    }
+
+    private fun hasAnswerPerm(): Boolean =
+        checkSelfPermission(Manifest.permission.ANSWER_PHONE_CALLS) == PackageManager.PERMISSION_GRANTED
+
+    // Nghe may: SIM dung TelecomManager (dang tin cay), VoIP ban lai nut Nghe cua thong bao
+    private fun answerCall() {
+        if (Build.VERSION.SDK_INT >= 26 && hasAnswerPerm()) {
+            try { (getSystemService(Context.TELECOM_SERVICE) as TelecomManager).acceptRingingCall() } catch (_: Exception) {}
+        }
+        CallListener.answer()
+    }
+
+    private fun rejectCall() {
+        if (Build.VERSION.SDK_INT >= 28 && hasAnswerPerm()) {
+            try { (getSystemService(Context.TELECOM_SERVICE) as TelecomManager).endCall() } catch (_: Exception) {}
+        }
+        CallListener.reject()
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -103,8 +124,8 @@ class MainActivity : FlutterActivity() {
                     stopService(Intent(this, WatchService::class.java))
                     result.success(true)
                 }
-                "callAnswer" -> { CallListener.answer(); result.success(true) }
-                "callReject" -> { CallListener.reject(); result.success(true) }
+                "callAnswer" -> { answerCall(); result.success(true) }
+                "callReject" -> { rejectCall(); result.success(true) }
                 else -> result.notImplemented()
             }
         }

@@ -90,6 +90,7 @@ class BleService extends ChangeNotifier {
       Permission.bluetoothConnect,
       Permission.locationWhenInUse,
       Permission.notification,   // Android 13+: de hien thong bao dich vu nen
+      Permission.phone,          // ANSWER_PHONE_CALLS: nghe/tu choi cuoc goi SIM tu dong ho
     ].request();
     // Chi bat buoc quyen Bluetooth; quyen thong bao khong co van chay duoc
     return (res[Permission.bluetoothScan]?.isGranted ?? false) &&
