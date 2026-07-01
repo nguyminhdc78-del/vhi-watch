@@ -15,6 +15,7 @@ NotifyState g_notify;
 MusicState  g_music;
 uint8_t      g_uiR = 255, g_uiG = 255, g_uiB = 255;
 volatile bool g_colorChanged = false;
+volatile bool g_colorSave = false;
 WeatherState g_weather;
 CallState g_call;
 ContactBook g_contacts;

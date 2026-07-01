@@ -76,6 +76,7 @@ extern MusicState g_music;
 // --- Mau chu giao dien (mac dinh trang) ---
 extern uint8_t      g_uiR, g_uiG, g_uiB;
 extern volatile bool g_colorChanged;
+extern volatile bool g_colorSave;      // can ghi mau xuong flash (lam o main loop, KHONG trong callback BLE)
 
 // --- Thoi tiet (app lay online gui xuong) ---
 struct WeatherState {

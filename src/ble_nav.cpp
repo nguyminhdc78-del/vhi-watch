@@ -155,9 +155,7 @@ class ColorCB : public NimBLECharacteristicCallbacks {
             g_uiG = (uint8_t)v[1];
             g_uiB = (uint8_t)v[2];
             g_colorChanged = true;
-            // Luu lai de giu mau sau khi tat/mo nguon
-            File f = LittleFS.open("/uicolor.dat", "w");
-            if (f) { uint8_t rgb[3] = {g_uiR, g_uiG, g_uiB}; f.write(rgb, 3); f.close(); }
+            g_colorSave = true;   // ghi flash o main loop (tranh block callback BLE)
         }
     }
 };
@@ -294,6 +292,13 @@ void ble_init() {
     adv->setScanResponse(true);
     NimBLEDevice::startAdvertising();
     Serial.println("[BLE] Bat dau quang cao");
+}
+
+// Goi dinh ky: neu chua ket noi ma vi ly do nao do ngung quang cao -> phat lai
+void ble_ensure_advertising() {
+    if (g_sys.bleConnected) return;
+    NimBLEAdvertising *adv = NimBLEDevice::getAdvertising();
+    if (adv && !adv->isAdvertising()) NimBLEDevice::startAdvertising();
 }
 
 void ble_stop() {

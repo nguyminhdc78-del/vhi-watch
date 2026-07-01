@@ -85,9 +85,17 @@ void loop() {
     // 4) Web server (khi dang upload)
     web_task();
 
-    // 5) Notify trang thai len dien thoai ~3s
+    // 5) Notify trang thai + dam bao dang quang cao ~3s
     if (now - lastStatus >= 3000) {
         lastStatus = now;
         ble_notify_status();
+        ble_ensure_advertising();   // chua ket noi ma ngung phat -> phat lai
+    }
+
+    // 6) Ghi mau xuong flash (dua ra khoi callback BLE cho an toan)
+    if (g_colorSave) {
+        g_colorSave = false;
+        File f = LittleFS.open("/uicolor.dat", "w");
+        if (f) { uint8_t rgb[3] = {g_uiR, g_uiG, g_uiB}; f.write(rgb, 3); f.close(); }
     }
 }
