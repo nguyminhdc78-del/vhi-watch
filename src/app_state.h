@@ -58,17 +58,17 @@ extern volatile bool g_routeDirty;
 
 // --- Thong bao tu dien thoai ---
 struct NotifyState {
-    char app[24]   = "";
-    char title[48] = "";
-    char text[96]  = "";
+    char app[28]    = "";
+    char title[88]  = "";
+    char text[112]  = "";
     bool hasNew     = false;   // co thong bao moi chua xem
 };
 extern NotifyState g_notify;
 
 // --- Bai hat dang phat ---
 struct MusicState {
-    char title[48]  = "";
-    char artist[48] = "";
+    char title[96]  = "";
+    char artist[96] = "";
     bool playing     = false;
 };
 extern MusicState g_music;
@@ -88,8 +88,8 @@ extern WeatherState g_weather;
 // --- Cuoc goi den (app gui xuong khi co cuoc goi tu SIM/Zalo/Mess...) ---
 struct CallState {
     bool ringing   = false;   // dang co cuoc goi den
-    char name[40]  = "";      // ten/so nguoi goi
-    char app[24]   = "";      // app goi (Zalo, Mess, Dien thoai...)
+    char name[96]  = "";      // ten/so nguoi goi
+    char app[32]   = "";      // app goi (Zalo, Mess, Dien thoai...)
     bool changed   = false;   // co thay doi -> UI xu ly (mo/dong man cuoc goi)
 };
 extern CallState g_call;

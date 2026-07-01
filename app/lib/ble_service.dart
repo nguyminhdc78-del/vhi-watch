@@ -333,7 +333,7 @@ class BleService extends ChangeNotifier {
   Future<void> sendCall(String name, String app, bool ringing) async {
     if (_call == null) return;
     final js = ringing
-        ? jsonEncode({'st': 1, 'name': vnNoAccent(_clip(name, 38)), 'app': vnNoAccent(_clip(app, 20))})
+        ? jsonEncode({'st': 1, 'name': _clipBytes(name, 88), 'app': _clipBytes(app, 28)})
         : jsonEncode({'st': 0});
     try { await _call!.write(utf8.encode(js), withoutResponse: true); } catch (_) {}
   }
@@ -341,13 +341,27 @@ class BleService extends ChangeNotifier {
 
   String _clip(String s, int n) => s.length > n ? s.substring(0, n) : s;
 
+  // Cat chuoi theo so BYTE UTF-8 (khong cat giua 1 ky tu) de vua goi BLE
+  String _clipBytes(String s, int maxBytes) {
+    if (utf8.encode(s).length <= maxBytes) return s;
+    final buf = StringBuffer();
+    int used = 0;
+    for (final r in s.runes) {
+      final cb = utf8.encode(String.fromCharCode(r)).length;
+      if (used + cb > maxBytes) break;
+      buf.writeCharCode(r);
+      used += cb;
+    }
+    return buf.toString();
+  }
+
   // Gui thong bao xuong dong ho
   Future<void> sendNotify(String app, String title, String text) async {
     if (_notify == null) return;
     final js = jsonEncode({
-      'app': vnNoAccent(_clip(app, 22)),
-      'title': vnNoAccent(_clip(title, 46)),
-      'text': vnNoAccent(_clip(text, 90)),
+      'app': _clipBytes(app, 22),
+      'title': _clipBytes(title, 80),
+      'text': _clipBytes(text, 96),
     });
     try { await _notify!.write(utf8.encode(js), withoutResponse: true); } catch (_) {}
   }
@@ -356,8 +370,8 @@ class BleService extends ChangeNotifier {
   Future<void> sendMusic(String title, String artist, bool playing) async {
     if (_music == null) return;
     final js = jsonEncode({
-      'title': vnNoAccent(_clip(title, 46)),
-      'artist': vnNoAccent(_clip(artist, 46)),
+      'title': _clipBytes(title, 88),
+      'artist': _clipBytes(artist, 88),
       'playing': playing ? 1 : 0,
     });
     try { await _music!.write(utf8.encode(js), withoutResponse: true); } catch (_) {}

@@ -11,6 +11,10 @@
 #include <math.h>
 #include <LittleFS.h>
 
+// Font tieng Viet (co dau) - dung cho thong bao / nhac / ten nguoi goi
+LV_FONT_DECLARE(vn_font_16);
+LV_FONT_DECLARE(vn_font_20);
+
 // ============================================================
 //  Quan ly man hinh bang 1 state machine don gian.
 //  Moi man hinh co 1 container goc (focusable) nhan phim:
@@ -356,12 +360,12 @@ static void build_notify(lv_obj_t *scr) {
     lv_obj_align(t, LV_ALIGN_TOP_MID, 0, 8);
 
     lblNApp = lv_label_create(scr);
-    lv_obj_set_style_text_font(lblNApp, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(lblNApp, &vn_font_16, 0);
     lv_obj_set_style_text_color(lblNApp, lv_color_hex(0x33CCFF), 0);
     lv_obj_align(lblNApp, LV_ALIGN_TOP_MID, 0, 40);
 
     lblNTitle = lv_label_create(scr);
-    lv_obj_set_style_text_font(lblNTitle, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(lblNTitle, &vn_font_20, 0);
     lv_obj_set_style_text_color(lblNTitle, lv_color_white(), 0);
     lv_obj_set_width(lblNTitle, 214);
     lv_label_set_long_mode(lblNTitle, LV_LABEL_LONG_DOT);
@@ -369,7 +373,7 @@ static void build_notify(lv_obj_t *scr) {
     lv_obj_align(lblNTitle, LV_ALIGN_TOP_MID, 0, 64);
 
     lblNText = lv_label_create(scr);
-    lv_obj_set_style_text_font(lblNText, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(lblNText, &vn_font_16, 0);
     lv_obj_set_style_text_color(lblNText, lv_color_hex(0xCCCCCC), 0);
     lv_obj_set_width(lblNText, 214);
     lv_label_set_long_mode(lblNText, LV_LABEL_LONG_WRAP);
@@ -407,7 +411,7 @@ static void build_music(lv_obj_t *scr) {
     lv_obj_align(t, LV_ALIGN_TOP_MID, 0, 8);
 
     lblMTitle = lv_label_create(scr);
-    lv_obj_set_style_text_font(lblMTitle, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(lblMTitle, &vn_font_20, 0);
     lv_obj_set_style_text_color(lblMTitle, lv_color_white(), 0);
     lv_obj_set_width(lblMTitle, 214);
     lv_label_set_long_mode(lblMTitle, LV_LABEL_LONG_SCROLL_CIRCULAR);
@@ -415,7 +419,7 @@ static void build_music(lv_obj_t *scr) {
     lv_obj_align(lblMTitle, LV_ALIGN_TOP_MID, 0, 48);
 
     lblMArtist = lv_label_create(scr);
-    lv_obj_set_style_text_font(lblMArtist, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(lblMArtist, &vn_font_16, 0);
     lv_obj_set_style_text_color(lblMArtist, lv_color_hex(0xAAAAAA), 0);
     lv_obj_set_width(lblMArtist, 214);
     lv_label_set_long_mode(lblMArtist, LV_LABEL_LONG_DOT);
@@ -811,7 +815,7 @@ static void build_call(lv_obj_t *scr) {
     lv_obj_align(app, LV_ALIGN_TOP_MID, 0, 44);
 
     lv_obj_t *name = lv_label_create(scr);
-    lv_obj_set_style_text_font(name, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(name, &vn_font_20, 0);
     lv_obj_set_style_text_color(name, lv_color_white(), 0);
     lv_obj_set_width(name, 220);
     lv_label_set_long_mode(name, LV_LABEL_LONG_WRAP);
