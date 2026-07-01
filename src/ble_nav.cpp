@@ -167,6 +167,18 @@ class ImgSelCB : public NimBLECharacteristicCallbacks {
     }
 };
 
+// Thoi tiet: {"t":31,"w":"Nang"}
+class WeatherCB : public NimBLECharacteristicCallbacks {
+    void onWrite(NimBLECharacteristic *c) override {
+        std::string v = c->getValue();
+        StaticJsonDocument<128> doc;
+        if (deserializeJson(doc, v.c_str()) != DeserializationError::Ok) return;
+        g_weather.temp = doc["t"] | 0;
+        strlcpy(g_weather.text, doc["w"] | "", sizeof(g_weather.text));
+        g_weather.has = true;
+    }
+};
+
 static NimBLECharacteristic *chrMedia = nullptr;
 
 void ble_init() {
@@ -221,6 +233,11 @@ void ble_init() {
         svc->createCharacteristic(BLE_CHR_IMGSEL_UUID,
                                   NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
     chrImgSel->setCallbacks(new ImgSelCB());
+
+    NimBLECharacteristic *chrWeather =
+        svc->createCharacteristic(BLE_CHR_WEATHER_UUID,
+                                  NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
+    chrWeather->setCallbacks(new WeatherCB());
 
     svc->start();
 

@@ -77,6 +77,14 @@ extern MusicState g_music;
 extern uint8_t      g_uiR, g_uiG, g_uiB;
 extern volatile bool g_colorChanged;
 
+// --- Thoi tiet (app lay online gui xuong) ---
+struct WeatherState {
+    bool has       = false;
+    int  temp      = 0;       // do C
+    char text[14]  = "";      // mo ta ngan khong dau: "Nang", "Mua", "May"...
+};
+extern WeatherState g_weather;
+
 // Moc thoi gian co hoat dong gan nhat (nut bam / thong bao) - de tinh idle -> deep sleep
 extern volatile uint32_t g_lastInputMs;
 

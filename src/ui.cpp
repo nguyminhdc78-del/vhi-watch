@@ -17,7 +17,7 @@
 //    NEXT/PREV = di chuyen, ENTER = chon, ESC = quay lai
 // ============================================================
 
-enum Screen { SCR_WATCH, SCR_MENU, SCR_NAV, SCR_UPLOAD, SCR_NOTIFY, SCR_MUSIC, SCR_REMOTE, SCR_CAMERA, SCR_QR, SCR_FIND, SCR_TIMER, SCR_GAME };
+enum Screen { SCR_WATCH, SCR_MENU, SCR_NAV, SCR_UPLOAD, SCR_NOTIFY, SCR_MUSIC, SCR_REMOTE, SCR_CAMERA, SCR_QR, SCR_FIND, SCR_TIMER };
 
 static lv_group_t *g_group   = nullptr;
 static lv_obj_t   *g_scr     = nullptr;   // man hinh hien tai
@@ -45,9 +45,8 @@ static const char *MENU_ITEMS[] = { LV_SYMBOL_BELL    " Thong bao",
                                     LV_SYMBOL_IMAGE   " Doi anh nen",
                                     LV_SYMBOL_CALL    " Tim dien thoai",
                                     LV_SYMBOL_LOOP    " Bam gio",
-                                    LV_SYMBOL_PLAY    " Game Dino",
                                     LV_SYMBOL_SETTINGS " Cai dat" };
-static const int   MENU_N = 10;
+static const int   MENU_N = 9;
 static int         menuSel = 0;
 static lv_obj_t   *menuBtns[MENU_N];
 
@@ -58,7 +57,6 @@ static int  g_pendingScreen = -1;
 static void tmr_toggle();
 static void tmr_reset();
 static void tmr_cycle();
-static void game_btn();
 
 // ---------- tien ich ----------
 static lv_obj_t* make_root() {
@@ -120,9 +118,14 @@ static void wf_clear_band(int y0, int h) {
 
 static void draw_wf_status() {
     wf_clear_band(0, 22);
-    char s[40];
-    snprintf(s, sizeof(s), "%s  %d%%",
-             g_sys.bleConnected ? "BLE" : "Cho ket noi", g_sys.battPercent);
+    char s[64];
+    if (g_weather.has)
+        snprintf(s, sizeof(s), "%s  %d%%   %dC %s",
+                 g_sys.bleConnected ? "BLE" : "X", g_sys.battPercent,
+                 g_weather.temp, g_weather.text);
+    else
+        snprintf(s, sizeof(s), "%s  %d%%",
+                 g_sys.bleConnected ? "BLE" : "Cho ket noi", g_sys.battPercent);
     display_text_center(SCREEN_W / 2, 4, s, 0x5E8C, 1);
 }
 
@@ -250,8 +253,7 @@ static void menu_activate() {
         case 5: request_screen(SCR_UPLOAD); break;
         case 6: request_screen(SCR_FIND);   break;
         case 7: request_screen(SCR_TIMER);  break;
-        case 8: request_screen(SCR_GAME);   break;
-        case 9: /* TODO: cai dat */         break;
+        case 8: /* TODO: cai dat */         break;
     }
 }
 
@@ -704,11 +706,6 @@ static void key_handler(lv_event_t *e) {
             else if (key == LV_KEY_UP)    tmr_cycle();                // A giu: doi che do
             else if (key == LV_KEY_ESC)   request_screen(SCR_MENU);   // C: thoat
             break;
-
-        case SCR_GAME:
-            if (key == LV_KEY_DOWN || key == LV_KEY_ENTER) game_btn(); // A/B: nhay / choi lai
-            else if (key == LV_KEY_ESC) request_screen(SCR_MENU);      // C: thoat
-            break;
     }
 }
 
@@ -792,101 +789,12 @@ static void build_timer(lv_obj_t *scr) {
 }
 
 // ============================================================
-//  GAME DINO (ve truc tiep)
-// ============================================================
-#define GM_GROUND   190
-#define GM_DINO_X   36
-#define GM_DINO_W   20
-#define GM_DINO_H   24
-#define GM_OB_W     16
-static bool  gmOver = false;
-static float gmY = 0, gmVel = 0;
-static int   gmObX = 240, gmObH = 28, gmScore = 0;
-static float gmSpeed = 3.0f;
-static uint32_t gmLastMs = 0;
-static int   gmPrevY = 0, gmPrevObX = 240, gmPrevObH = 28, gmPrevScore = -1;
-
-static void game_reset() {
-    gmOver = false;
-    gmY = GM_GROUND - GM_DINO_H; gmVel = 0;
-    gmObX = 240; gmObH = 28; gmScore = 0; gmSpeed = 3.0f;
-    gmPrevY = (int)gmY; gmPrevObX = gmObX; gmPrevObH = gmObH; gmPrevScore = -1;
-    display_fill(0x0000);
-    display_draw_line(0, GM_GROUND, 239, GM_GROUND, 0xFFFF);
-    display_text(6, 4, "0", 0xFFFF, 0x0000);
-    display_text_center(120, 30, "Nhan A/B de nhay", 0x8410, 1);
-}
-static void game_btn() {
-    if (gmOver) { game_reset(); return; }
-    if (gmY >= GM_GROUND - GM_DINO_H - 0.5f) gmVel = -11.0f;   // chi nhay khi cham dat
-}
-static void game_step() {
-    // xoa vi tri cu
-    display_fill_rect(GM_DINO_X, gmPrevY, GM_DINO_W, GM_DINO_H, 0x0000);
-    display_fill_rect(gmPrevObX, GM_GROUND - gmPrevObH, GM_OB_W, gmPrevObH, 0x0000);
-
-    // vat ly dino
-    gmVel += 0.9f; gmY += gmVel;
-    if (gmY > GM_GROUND - GM_DINO_H) { gmY = GM_GROUND - GM_DINO_H; gmVel = 0; }
-
-    // chuong ngai chay sang trai
-    gmObX -= (int)gmSpeed;
-    if (gmObX < -GM_OB_W) {
-        gmObX = 240 + (int)random(10, 120);
-        gmObH = 22 + (int)random(0, 16);
-        gmScore++;
-        if (gmSpeed < 8.0f) gmSpeed += 0.15f;
-    }
-
-    display_draw_line(0, GM_GROUND, 239, GM_GROUND, 0xFFFF);   // ve lai vach dat
-
-    int dTop = (int)gmY;
-    bool hit = (GM_DINO_X < gmObX + GM_OB_W) && (GM_DINO_X + GM_DINO_W > gmObX) &&
-               (dTop + GM_DINO_H > GM_GROUND - gmObH);
-
-    display_fill_rect(GM_DINO_X, dTop, GM_DINO_W, GM_DINO_H, 0x07E0);         // dino xanh la
-    display_fill_rect(gmObX, GM_GROUND - gmObH, GM_OB_W, gmObH, 0xF800);      // chuong ngai do
-
-    if (gmScore != gmPrevScore) {
-        display_fill_rect(0, 2, 80, 18, 0x0000);
-        char b[12]; snprintf(b, sizeof(b), "%d", gmScore);
-        display_text(6, 4, b, 0xFFFF, 0x0000);
-        gmPrevScore = gmScore;
-    }
-    gmPrevY = dTop; gmPrevObX = gmObX; gmPrevObH = gmObH;
-
-    if (hit) {
-        gmOver = true;
-        display_fill_rect(16, 86, 208, 70, 0x0000);
-        display_text_center(120, 92, "GAME OVER", 0xF800, 3);
-        char b[24]; snprintf(b, sizeof(b), "Diem: %d", gmScore);
-        display_text_center(120, 126, b, 0xFFFF, 2);
-        display_text_center(120, 210, "B: choi lai   C: thoat", 0xAD55, 1);
-    }
-}
-static void build_game(lv_obj_t *scr) {
-    (void)scr;
-    display_set_raw(true);
-    gmLastMs = millis();
-    game_reset();
-}
-
-// Goi moi vong loop() de game chay muot (~30fps). Ngoai game thi thoat ngay.
-void ui_fast_tick() {
-    if (g_cur != SCR_GAME || gmOver) return;
-    uint32_t now = millis();
-    if (now - gmLastMs < 33) return;
-    gmLastMs = now;
-    game_step();
-}
-
-// ============================================================
 //  Chuyen man hinh
 // ============================================================
 static void show_screen(Screen s) {
     // doc don dep man hinh cu
     lv_obj_t *old = g_scr;
-    if (g_cur == SCR_WATCH || g_cur == SCR_QR || g_cur == SCR_GAME) display_set_raw(false);  // het man ve-raw
+    if (g_cur == SCR_WATCH || g_cur == SCR_QR) display_set_raw(false);  // het man ve-raw
     if (g_cur == SCR_REMOTE || g_cur == SCR_CAMERA) { hid_stop(); ble_init(); } // tat HID, bat lai BLE thuong
 
     // reset con tro label
@@ -920,7 +828,6 @@ static void show_screen(Screen s) {
         case SCR_QR:     build_qr(g_scr);        break;
         case SCR_FIND:   build_find(g_scr);      break;
         case SCR_TIMER:  build_timer(g_scr);     break;
-        case SCR_GAME:   build_game(g_scr);      break;
     }
 
     lv_scr_load(g_scr);
@@ -974,7 +881,8 @@ void ui_tick() {
         uint32_t ep = clock_now_epoch();
         int curMin = ep ? (int)((ep + 7 * 3600) / 60) : -1;
         if (curMin != wfLastMin) { wfLastMin = curMin; draw_wf_time(); }
-        int st = (g_sys.bleConnected ? 1000 : 0) + g_sys.battPercent;
+        int st = (g_sys.bleConnected ? 1000 : 0) + g_sys.battPercent
+                 + (g_weather.has ? 5000 + g_weather.temp * 10 + g_weather.text[0] : 0);
         if (st != wfLastStat) { wfLastStat = st; draw_wf_status(); }
     }
 

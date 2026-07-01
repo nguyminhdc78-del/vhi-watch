@@ -15,6 +15,7 @@ dependencies:
   image: ^4.2.0                   # resize + convert RGB565
   image_picker: ^1.1.2            # chon anh tu thu vien
   notification_listener_service: ^1.0.0  # doc thong bao Android
+  http: ^1.2.0                    # lay thoi tiet (Open-Meteo, khong can API key)
 
 dev_dependencies:
   flutter_lints: ^4.0.0

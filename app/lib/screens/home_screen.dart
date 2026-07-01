@@ -122,6 +122,7 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
             ),
+            const _WeatherCard(),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -177,5 +178,74 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
       );
+}
+
+// Thẻ thời tiết: hiện nhiệt độ hiện tại + đổi thành phố
+class _WeatherCard extends StatefulWidget {
+  const _WeatherCard();
+  @override
+  State<_WeatherCard> createState() => _WeatherCardState();
+}
+
+class _WeatherCardState extends State<_WeatherCard> {
+  late final TextEditingController _c;
+  @override
+  void initState() {
+    super.initState();
+    _c = TextEditingController(text: BleService.I.weatherCity);
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ble = BleService.I;
+    return ListenableBuilder(
+      listenable: ble,
+      builder: (context, _) => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Thời tiết',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              Text(
+                ble.weatherOk
+                    ? '${ble.weatherTemp}°C · ${ble.weatherText}  (${ble.weatherCity})'
+                    : 'Chưa có dữ liệu. Kết nối đồng hồ rồi bấm Cập nhật.',
+                style: TextStyle(color: Colors.grey[400]),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _c,
+                      decoration: const InputDecoration(
+                        labelText: 'Thành phố',
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: () => ble.setWeatherCity(_c.text),
+                    child: const Text('Cập nhật'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 

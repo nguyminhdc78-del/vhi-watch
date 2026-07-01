@@ -15,6 +15,7 @@ NotifyState g_notify;
 MusicState  g_music;
 uint8_t      g_uiR = 255, g_uiG = 255, g_uiB = 255;
 volatile bool g_colorChanged = false;
+WeatherState g_weather;
 volatile uint32_t g_lastInputMs = 0;
 
 volatile uint8_t g_uploadTarget = 0xFF;   // mac dinh: anh nen

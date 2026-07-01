@@ -45,6 +45,7 @@
 #define BLE_CHR_MEDIA_UUID  "6e400009-b5a3-f393-e0a9-e50e24dcca9e" // watch -> phone: lenh dieu khien nhac (notify)
 #define BLE_CHR_COLOR_UUID  "6e40000a-b5a3-f393-e0a9-e50e24dcca9e" // phone -> watch: mau chu (3 byte R,G,B)
 #define BLE_CHR_IMGSEL_UUID "6e40000b-b5a3-f393-e0a9-e50e24dcca9e" // phone -> watch: chon dich upload anh (0xFF=anh nen, 0..N=o QR)
+#define BLE_CHR_WEATHER_UUID "6e40000c-b5a3-f393-e0a9-e50e24dcca9e" // phone -> watch: thoi tiet (JSON {"t":31,"w":"Nang"})
 
 // The ten / QR badge: so o luu anh QR (240x240 RGB565 trong LittleFS)
 #define QR_COUNT            4

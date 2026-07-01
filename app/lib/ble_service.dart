@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'weather_service.dart';
 
 // Bo dau tieng Viet (font dong ho khong co dau)
 String vnNoAccent(String s) {
@@ -41,15 +42,23 @@ class BleService extends ChangeNotifier {
   static const _mediaUuid  = "6e400009-b5a3-f393-e0a9-e50e24dcca9e";
   static const _colorUuid  = "6e40000a-b5a3-f393-e0a9-e50e24dcca9e";
   static const _imgselUuid = "6e40000b-b5a3-f393-e0a9-e50e24dcca9e";
+  static const _weatherUuid = "6e40000c-b5a3-f393-e0a9-e50e24dcca9e";
 
   static const _mediaCh = MethodChannel('vhi/media'); // gui phim media Android
 
   BluetoothDevice? _device;
-  BluetoothCharacteristic? _nav, _time, _stat, _wp, _route, _notify, _music, _media, _color, _imgsel;
+  BluetoothCharacteristic? _nav, _time, _stat, _wp, _route, _notify, _music, _media, _color, _imgsel, _weather;
   StreamSubscription<BluetoothConnectionState>? _connSub;
   StreamSubscription<List<ScanResult>>? _scanSub;
   StreamSubscription<List<int>>? _statSub;
   StreamSubscription<List<int>>? _mediaSub;
+  Timer? _weatherTimer;
+
+  // Thoi tiet (hien tren UI + gui xuong dong ho)
+  String weatherCity = 'Ho Chi Minh';
+  String weatherText = '';
+  int weatherTemp = 0;
+  bool weatherOk = false;
 
   // trang thai cho UI
   bool connected = false;
@@ -184,6 +193,7 @@ class BleService extends ChangeNotifier {
             else if (u == _mediaUuid) _media = c;
             else if (u == _colorUuid) _color = c;
             else if (u == _imgselUuid) _imgsel = c;
+            else if (u == _weatherUuid) _weather = c;
           }
         }
       }
@@ -205,6 +215,7 @@ class BleService extends ChangeNotifier {
       status = 'Đã kết nối: ${dev.platformName}';
       notifyListeners();
       await syncTime();
+      _startWeatherLoop();   // lay thoi tiet + gui xuong, tu cap nhat moi 30 phut
     } catch (e) {
       busy = false;
       status = 'Lỗi kết nối: $e';
@@ -225,7 +236,8 @@ class BleService extends ChangeNotifier {
   void _onDisconnect() {
     connected = false;
     _mediaSub?.cancel();
-    _nav = _time = _stat = _wp = _route = _notify = _music = _media = _color = _imgsel = null;
+    _weatherTimer?.cancel();
+    _nav = _time = _stat = _wp = _route = _notify = _music = _media = _color = _imgsel = _weather = null;
     status = autoReconnect ? 'Mất kết nối - đang kết nối lại...' : 'Mất kết nối';
     notifyListeners();
     _scheduleReconnect();   // tu dong ket noi lai (vd dong ho ngu/bat lai)
@@ -267,6 +279,33 @@ class BleService extends ChangeNotifier {
     try {
       await _color!.write([r & 0xff, g & 0xff, b & 0xff], withoutResponse: true);
     } catch (_) {}
+  }
+
+  // --- Thoi tiet ---
+  void _startWeatherLoop() {
+    _weatherTimer?.cancel();
+    sendWeather();
+    _weatherTimer = Timer.periodic(const Duration(minutes: 30), (_) => sendWeather());
+  }
+
+  // Lay thoi tiet theo thanh pho hien tai roi gui xuong dong ho
+  Future<void> sendWeather() async {
+    final r = await WeatherService.fetch(weatherCity);
+    if (r == null) return;
+    weatherTemp = r.temp;
+    weatherText = r.text;
+    weatherOk = true;
+    notifyListeners();
+    if (_weather == null) return;
+    final js = jsonEncode({'t': r.temp, 'w': vnNoAccent(r.text)});
+    try { await _weather!.write(utf8.encode(js), withoutResponse: true); } catch (_) {}
+  }
+
+  // Doi thanh pho -> lay lai thoi tiet ngay
+  Future<void> setWeatherCity(String city) async {
+    weatherCity = city.trim().isEmpty ? weatherCity : city.trim();
+    notifyListeners();
+    await sendWeather();
   }
 
 
