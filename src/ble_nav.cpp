@@ -25,12 +25,10 @@ static void wp_reset() { if (wpFile) wpFile.close(); wpReceived = 0; }
 static NimBLECharacteristic *chrStatus = nullptr;
 
 class ServerCB : public NimBLEServerCallbacks {
-    void onConnect(NimBLEServer *s, ble_gap_conn_desc *desc) override {
+    void onConnect(NimBLEServer *s) override {
         g_sys.bleConnected = true;
-        // Supervision timeout ~6s: mat song thi phat hien nhanh -> onDisconnect -> phat lai
-        // (tranh "ket noi ma" khi dien thoai mat ma dong ho khong biet)
-        s->updateConnParams(desc->conn_handle, 24, 40, 0, 600);
         Serial.println("[BLE] Dien thoai da ket noi");
+        // KHONG ep supervision timeout ngan (an-ten yeu -> hay rot). De mac dinh cho on dinh.
     }
     void onDisconnect(NimBLEServer *s) override {
         g_sys.bleConnected = false;

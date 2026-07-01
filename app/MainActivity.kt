@@ -260,9 +260,14 @@ class CallListener : NotificationListenerService() {
         fun reject() { try { declinePI?.send() } catch (_: Exception) {} }
     }
 
+    // TAM TAT chuyen tiep thong bao tin nhan (nghi ngo lam nghen BLE tren C3).
+    // Doi thanh true de bat lai.
+    private val forwardNotifications = false
+
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val n = sbn.notification ?: return
         if (n.category == Notification.CATEGORY_CALL) { handleCall(sbn, n); return }
+        if (!forwardNotifications) return
         // Thong bao thuong (tin nhan Zalo/Mess/SMS/email...) -> chuyen tiep len dong ho
         if (sbn.packageName == packageName) return
         if ((n.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return   // bo thong bao gop
@@ -319,6 +324,7 @@ class CallListener : NotificationListenerService() {
             notifyFlutter("callEnded", null)
             return
         }
+        if (!forwardNotifications) return
         if (sbn.packageName == packageName) return
         if (lastSent.remove(sbn.key) == null) return   // chua tung gui -> khong bao xoa
         notifyFlutter("notification", mapOf(
