@@ -82,6 +82,9 @@ void loop() {
         ui_tick();
     }
 
+    // 3b) Game chay nhanh (~30fps) khi dang o man Game
+    ui_fast_tick();
+
     // 4) Web server (khi dang upload)
     web_task();
 

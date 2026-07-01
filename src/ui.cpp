@@ -6,6 +6,7 @@
 #include "ble_nav.h"
 #include "hid_remote.h"
 #include "display.h"
+#include <Arduino.h>
 #include <time.h>
 #include <math.h>
 #include <LittleFS.h>
@@ -16,7 +17,7 @@
 //    NEXT/PREV = di chuyen, ENTER = chon, ESC = quay lai
 // ============================================================
 
-enum Screen { SCR_WATCH, SCR_MENU, SCR_NAV, SCR_UPLOAD, SCR_NOTIFY, SCR_MUSIC, SCR_REMOTE, SCR_CAMERA, SCR_QR, SCR_FIND };
+enum Screen { SCR_WATCH, SCR_MENU, SCR_NAV, SCR_UPLOAD, SCR_NOTIFY, SCR_MUSIC, SCR_REMOTE, SCR_CAMERA, SCR_QR, SCR_FIND, SCR_TIMER, SCR_GAME };
 
 static lv_group_t *g_group   = nullptr;
 static lv_obj_t   *g_scr     = nullptr;   // man hinh hien tai
@@ -43,14 +44,21 @@ static const char *MENU_ITEMS[] = { LV_SYMBOL_BELL    " Thong bao",
                                     LV_SYMBOL_LIST    " The ten (QR)",
                                     LV_SYMBOL_IMAGE   " Doi anh nen",
                                     LV_SYMBOL_CALL    " Tim dien thoai",
+                                    LV_SYMBOL_LOOP    " Bam gio",
+                                    LV_SYMBOL_PLAY    " Game Dino",
                                     LV_SYMBOL_SETTINGS " Cai dat" };
-static const int   MENU_N = 8;
+static const int   MENU_N = 10;
 static int         menuSel = 0;
 static lv_obj_t   *menuBtns[MENU_N];
 
 static void show_screen(Screen s);     // forward
 static void request_screen(Screen s);  // forward: doi man hinh AN TOAN (hoan ngoai event)
 static int  g_pendingScreen = -1;
+// forward cho Bam gio + Game (goi tu key_handler)
+static void tmr_toggle();
+static void tmr_reset();
+static void tmr_cycle();
+static void game_btn();
 
 // ---------- tien ich ----------
 static lv_obj_t* make_root() {
@@ -241,7 +249,9 @@ static void menu_activate() {
         case 4: request_screen(SCR_QR);     break;
         case 5: request_screen(SCR_UPLOAD); break;
         case 6: request_screen(SCR_FIND);   break;
-        case 7: /* TODO: cai dat */         break;
+        case 7: request_screen(SCR_TIMER);  break;
+        case 8: request_screen(SCR_GAME);   break;
+        case 9: /* TODO: cai dat */         break;
     }
 }
 
@@ -687,7 +697,187 @@ static void key_handler(lv_event_t *e) {
             if (key == LV_KEY_DOWN || key == LV_KEY_ENTER) ble_send_media("findphone");   // A/B: reo lai
             else if (key == LV_KEY_ESC) { ble_send_media("findphone_stop"); request_screen(SCR_MENU); } // C: tat reo + thoat
             break;
+
+        case SCR_TIMER:
+            if (key == LV_KEY_ENTER)      tmr_toggle();               // B: chay/dung
+            else if (key == LV_KEY_DOWN)  tmr_reset();                // A ngan: reset
+            else if (key == LV_KEY_UP)    tmr_cycle();                // A giu: doi che do
+            else if (key == LV_KEY_ESC)   request_screen(SCR_MENU);   // C: thoat
+            break;
+
+        case SCR_GAME:
+            if (key == LV_KEY_DOWN || key == LV_KEY_ENTER) game_btn(); // A/B: nhay / choi lai
+            else if (key == LV_KEY_ESC) request_screen(SCR_MENU);      // C: thoat
+            break;
     }
+}
+
+// ============================================================
+//  BAM GIO / POMODORO
+// ============================================================
+static int  tmrMode = 0;             // 0=25p, 1=5p, 2=15p, 3=bam gio (dem len)
+static bool tmrRunning = false, tmrDone = false;
+static uint32_t tmrStartMs = 0;
+static int  tmrAccumSec = 0;
+static const int   TMR_PRESET[] = {25 * 60, 5 * 60, 15 * 60, 0};
+static const char *TMR_NAME[]   = {"Pomodoro 25", "Nghi 5 phut", "Tap trung 15", "Bam gio len"};
+static lv_obj_t *lblTmrTime = nullptr, *lblTmrMode = nullptr;
+
+static int tmr_elapsed() {
+    int el = tmrAccumSec;
+    if (tmrRunning) el += (int)((millis() - tmrStartMs) / 1000);
+    return el;
+}
+static void tmr_set_mode_label() {
+    if (!lblTmrMode) return;
+    char b[40];
+    snprintf(b, sizeof(b), "%s  %s", TMR_NAME[tmrMode], tmrRunning ? "(dang chay)" : "(tam dung)");
+    lv_label_set_text(lblTmrMode, b);
+    lv_obj_set_style_text_color(lblTmrMode, lv_color_hex(0xBBBBBB), 0);
+}
+static void tmr_show_value(int val) {
+    if (!lblTmrTime) return;
+    if (val < 0) val = 0;
+    char b[8]; snprintf(b, sizeof(b), "%02d:%02d", val / 60, val % 60);
+    lv_label_set_text(lblTmrTime, b);
+}
+static void tmr_reset() {
+    tmrRunning = false; tmrDone = false; tmrAccumSec = 0;
+    tmr_set_mode_label();
+    tmr_show_value(tmrMode == 3 ? 0 : TMR_PRESET[tmrMode]);
+}
+static void tmr_toggle() {
+    if (tmrDone) { tmr_reset(); return; }          // het gio -> nhan B = lam lai
+    if (tmrRunning) { tmrAccumSec = tmr_elapsed(); tmrRunning = false; }
+    else { tmrStartMs = millis(); tmrRunning = true; }
+    tmr_set_mode_label();
+}
+static void tmr_cycle() { tmrMode = (tmrMode + 1) % 4; tmr_reset(); }
+
+static void update_timer() {
+    if (g_cur != SCR_TIMER || !lblTmrTime) return;
+    int val;
+    if (tmrMode == 3) {
+        val = tmr_elapsed();                        // dem len
+    } else {
+        int rem = TMR_PRESET[tmrMode] - tmr_elapsed();
+        if (rem <= 0 && tmrRunning) {               // het gio -> bao
+            tmrRunning = false; tmrDone = true; tmrAccumSec = TMR_PRESET[tmrMode];
+            lv_label_set_text(lblTmrMode, "HET GIO ! (B de lam lai)");
+            lv_obj_set_style_text_color(lblTmrMode, lv_color_hex(0xFF5555), 0);
+        }
+        val = rem < 0 ? 0 : rem;
+    }
+    tmr_show_value(val);
+}
+
+static void build_timer(lv_obj_t *scr) {
+    lblTmrMode = lv_label_create(scr);
+    lv_obj_set_style_text_font(lblTmrMode, &lv_font_montserrat_16, 0);
+    lv_obj_align(lblTmrMode, LV_ALIGN_TOP_MID, 0, 28);
+
+    lblTmrTime = lv_label_create(scr);
+    lv_obj_set_style_text_font(lblTmrTime, &lv_font_montserrat_48, 0);
+    lv_obj_set_style_text_color(lblTmrTime, lv_color_white(), 0);
+    lv_obj_center(lblTmrTime);
+
+    lv_obj_t *hint = lv_label_create(scr);
+    lv_obj_set_style_text_font(hint, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(hint, lv_color_hex(0xE5A23B), 0);
+    lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_text(hint, "B: chay/dung   A: reset\ngiu A: doi che do   C: thoat");
+    lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -6);
+
+    tmr_reset();
+}
+
+// ============================================================
+//  GAME DINO (ve truc tiep)
+// ============================================================
+#define GM_GROUND   190
+#define GM_DINO_X   36
+#define GM_DINO_W   20
+#define GM_DINO_H   24
+#define GM_OB_W     16
+static bool  gmOver = false;
+static float gmY = 0, gmVel = 0;
+static int   gmObX = 240, gmObH = 28, gmScore = 0;
+static float gmSpeed = 3.0f;
+static uint32_t gmLastMs = 0;
+static int   gmPrevY = 0, gmPrevObX = 240, gmPrevObH = 28, gmPrevScore = -1;
+
+static void game_reset() {
+    gmOver = false;
+    gmY = GM_GROUND - GM_DINO_H; gmVel = 0;
+    gmObX = 240; gmObH = 28; gmScore = 0; gmSpeed = 3.0f;
+    gmPrevY = (int)gmY; gmPrevObX = gmObX; gmPrevObH = gmObH; gmPrevScore = -1;
+    display_fill(0x0000);
+    display_draw_line(0, GM_GROUND, 239, GM_GROUND, 0xFFFF);
+    display_text(6, 4, "0", 0xFFFF, 0x0000);
+    display_text_center(120, 30, "Nhan A/B de nhay", 0x8410, 1);
+}
+static void game_btn() {
+    if (gmOver) { game_reset(); return; }
+    if (gmY >= GM_GROUND - GM_DINO_H - 0.5f) gmVel = -11.0f;   // chi nhay khi cham dat
+}
+static void game_step() {
+    // xoa vi tri cu
+    display_fill_rect(GM_DINO_X, gmPrevY, GM_DINO_W, GM_DINO_H, 0x0000);
+    display_fill_rect(gmPrevObX, GM_GROUND - gmPrevObH, GM_OB_W, gmPrevObH, 0x0000);
+
+    // vat ly dino
+    gmVel += 0.9f; gmY += gmVel;
+    if (gmY > GM_GROUND - GM_DINO_H) { gmY = GM_GROUND - GM_DINO_H; gmVel = 0; }
+
+    // chuong ngai chay sang trai
+    gmObX -= (int)gmSpeed;
+    if (gmObX < -GM_OB_W) {
+        gmObX = 240 + (int)random(10, 120);
+        gmObH = 22 + (int)random(0, 16);
+        gmScore++;
+        if (gmSpeed < 8.0f) gmSpeed += 0.15f;
+    }
+
+    display_draw_line(0, GM_GROUND, 239, GM_GROUND, 0xFFFF);   // ve lai vach dat
+
+    int dTop = (int)gmY;
+    bool hit = (GM_DINO_X < gmObX + GM_OB_W) && (GM_DINO_X + GM_DINO_W > gmObX) &&
+               (dTop + GM_DINO_H > GM_GROUND - gmObH);
+
+    display_fill_rect(GM_DINO_X, dTop, GM_DINO_W, GM_DINO_H, 0x07E0);         // dino xanh la
+    display_fill_rect(gmObX, GM_GROUND - gmObH, GM_OB_W, gmObH, 0xF800);      // chuong ngai do
+
+    if (gmScore != gmPrevScore) {
+        display_fill_rect(0, 2, 80, 18, 0x0000);
+        char b[12]; snprintf(b, sizeof(b), "%d", gmScore);
+        display_text(6, 4, b, 0xFFFF, 0x0000);
+        gmPrevScore = gmScore;
+    }
+    gmPrevY = dTop; gmPrevObX = gmObX; gmPrevObH = gmObH;
+
+    if (hit) {
+        gmOver = true;
+        display_fill_rect(16, 86, 208, 70, 0x0000);
+        display_text_center(120, 92, "GAME OVER", 0xF800, 3);
+        char b[24]; snprintf(b, sizeof(b), "Diem: %d", gmScore);
+        display_text_center(120, 126, b, 0xFFFF, 2);
+        display_text_center(120, 210, "B: choi lai   C: thoat", 0xAD55, 1);
+    }
+}
+static void build_game(lv_obj_t *scr) {
+    (void)scr;
+    display_set_raw(true);
+    gmLastMs = millis();
+    game_reset();
+}
+
+// Goi moi vong loop() de game chay muot (~30fps). Ngoai game thi thoat ngay.
+void ui_fast_tick() {
+    if (g_cur != SCR_GAME || gmOver) return;
+    uint32_t now = millis();
+    if (now - gmLastMs < 33) return;
+    gmLastMs = now;
+    game_step();
 }
 
 // ============================================================
@@ -696,11 +886,12 @@ static void key_handler(lv_event_t *e) {
 static void show_screen(Screen s) {
     // doc don dep man hinh cu
     lv_obj_t *old = g_scr;
-    if (g_cur == SCR_WATCH || g_cur == SCR_QR) display_set_raw(false);  // het man ve-raw
+    if (g_cur == SCR_WATCH || g_cur == SCR_QR || g_cur == SCR_GAME) display_set_raw(false);  // het man ve-raw
     if (g_cur == SCR_REMOTE || g_cur == SCR_CAMERA) { hid_stop(); ble_init(); } // tat HID, bat lai BLE thuong
 
     // reset con tro label
     lblTime = lblDate = lblStat = nullptr;
+    lblTmrTime = lblTmrMode = nullptr;
     navArrow = navDist = navStreet = navEta = nullptr;
     navLine = navDot = nullptr;
     lblNApp = lblNTitle = lblNText = nullptr;
@@ -728,6 +919,8 @@ static void show_screen(Screen s) {
         case SCR_CAMERA: build_camera(g_scr);    break;
         case SCR_QR:     build_qr(g_scr);        break;
         case SCR_FIND:   build_find(g_scr);      break;
+        case SCR_TIMER:  build_timer(g_scr);     break;
+        case SCR_GAME:   build_game(g_scr);      break;
     }
 
     lv_scr_load(g_scr);
@@ -790,6 +983,7 @@ void ui_tick() {
     update_notify();
     update_music();
     update_remote();
+    update_timer();
     // Vua nhan xong 1 anh QR -> neu dang xem man QR thi ve lai
     if (g_qrImgUpdated) {
         g_qrImgUpdated = false;
