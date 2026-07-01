@@ -407,11 +407,12 @@ class BleService extends ChangeNotifier {
   Future<void> syncContacts() async {
     if (_contact == null) return;
     try {
-      await _contact!.write(utf8.encode('C'), withoutResponse: false);
+      await _contact!.write(utf8.encode('C'), withoutResponse: true);
+      await Future.delayed(const Duration(milliseconds: 40));
       for (final f in favorites) {
         final line = '${_clipBytes(f['name'] ?? '', 26)}\t${f['number']}';
-        await _contact!.write(utf8.encode(line), withoutResponse: false);
-        await Future.delayed(const Duration(milliseconds: 25));
+        await _contact!.write(utf8.encode(line), withoutResponse: true);
+        await Future.delayed(const Duration(milliseconds: 40));
       }
     } catch (_) {}
   }
@@ -526,9 +527,11 @@ class BleService extends ChangeNotifier {
   Future<void> syncTime() async {
     if (_time == null) return;
     final epoch = (DateTime.now().millisecondsSinceEpoch ~/ 1000).toString();
-    await _time!.write(utf8.encode(epoch));
-    lastSync = DateTime.now();
-    notifyListeners();
+    try {
+      await _time!.write(utf8.encode(epoch), withoutResponse: true);
+      lastSync = DateTime.now();
+      notifyListeners();
+    } catch (_) {}
   }
 
   Future<void> sendNav(Map<String, dynamic> obj) async {

@@ -254,6 +254,7 @@ class CallListener : NotificationListenerService() {
         private var answerPI: PendingIntent? = null
         private var declinePI: PendingIntent? = null
         private var currentKey: String? = null
+        private val lastSent = HashMap<String, String>()   // key -> "title|text" gan nhat (chong dội)
 
         fun answer() { try { answerPI?.send() } catch (_: Exception) {} }
         fun reject() { try { declinePI?.send() } catch (_: Exception) {} }
@@ -264,6 +265,7 @@ class CallListener : NotificationListenerService() {
         if (n.category == Notification.CATEGORY_CALL) { handleCall(sbn, n); return }
         // Thong bao thuong (tin nhan Zalo/Mess/SMS/email...) -> chuyen tiep len dong ho
         if (sbn.packageName == packageName) return
+        if ((n.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return   // bo thong bao gop
         val ex = n.extras
         val title = ex.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
         var text = ex.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
@@ -273,6 +275,11 @@ class CallListener : NotificationListenerService() {
             if (lines != null && lines.isNotEmpty()) text = lines.last().toString()
         }
         if (title.isEmpty() && text.isEmpty()) return
+        // Chong dội: cùng noi dung -> khong gui lai (nhieu app cap nhat thong bao lien tuc)
+        val sig = "$title|$text"
+        if (lastSent[sbn.key] == sig) return
+        lastSent[sbn.key] = sig
+        if (lastSent.size > 60) lastSent.clear()
         notifyFlutter("notification", mapOf(
             "pkg" to sbn.packageName, "title" to title, "text" to text, "removed" to false))
     }
@@ -309,6 +316,7 @@ class CallListener : NotificationListenerService() {
             return
         }
         if (sbn.packageName == packageName) return
+        if (lastSent.remove(sbn.key) == null) return   // chua tung gui -> khong bao xoa
         notifyFlutter("notification", mapOf(
             "pkg" to sbn.packageName, "title" to "", "text" to "", "removed" to true))
     }
