@@ -268,7 +268,8 @@ class BleService extends ChangeNotifier {
       _mediaCh.invokeMethod('watchCalls').catchError((_) {});   // theo doi cuoc goi SIM
       // Dời việc nặng (thời tiết + danh bạ) ra sau vài giây cho link ổn định truoc
       Future.delayed(const Duration(seconds: 3), () {
-        if (connected) { _startWeatherLoop(); syncContacts(); sendWfCfg(); }
+        if (connected) { _startWeatherLoop(); syncContacts(); }
+        // KHONG gui wfcfg khi ket noi (dong ho da tu nho) -> tranh nhay ve mat So lon moi lan noi
       });
     } catch (e) {
       busy = false;

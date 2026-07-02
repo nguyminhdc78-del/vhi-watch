@@ -1065,7 +1065,7 @@ void ui_tick() {
         if (g_cur == SCR_WATCH) draw_wf_time();
     }
 
-    // Doi giao dien gio (vi tri/co) tu app -> luu flash + ve lai toan bo
+    // Doi giao dien gio (vi tri/co) tu app -> luu flash + nhay ve mat "So lon" + ve lai
     if (g_wfCfgChanged) {
         g_wfCfgChanged = false;
         File f = LittleFS.open("/wfcfg.dat", "w");
@@ -1073,6 +1073,8 @@ void ui_tick() {
             uint8_t d[7] = {g_wfPos, g_wfSize, g_dateSize, g_dateShow, g_dateR, g_dateG, g_dateB};
             f.write(d, 7); f.close();
         }
+        wfStyle = 0;                       // chinh giao dien -> chuyen ve mat So lon de thay ngay
+        wf_save_style();
         if (g_cur == SCR_WATCH) { wfLastMin = -2; draw_wf_full(); }
     }
 
