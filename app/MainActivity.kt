@@ -132,8 +132,10 @@ class MainActivity : FlutterActivity() {
                 "mediaKey" -> {
                     val code = call.argument<Int>("code") ?: 0
                     val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-                    am.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, code))
-                    am.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, code))
+                    // Gan moc thoi gian dung -> "nhan ngan" (khong bi hieu la giu lau -> mo tro ly ao)
+                    val t = android.os.SystemClock.uptimeMillis()
+                    am.dispatchMediaKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_DOWN, code, 0))
+                    am.dispatchMediaKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_UP, code, 0))
                     result.success(true)
                 }
                 "openCamera" -> {
