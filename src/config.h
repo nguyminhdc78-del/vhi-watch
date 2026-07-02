@@ -49,6 +49,7 @@
 #define BLE_CHR_CALL_UUID    "6e40000d-b5a3-f393-e0a9-e50e24dcca9e" // phone -> watch: cuoc goi den (JSON {"st":1,"name":"..","app":".."})
 #define BLE_CHR_CONTACT_UUID "6e40000e-b5a3-f393-e0a9-e50e24dcca9e" // phone -> watch: danh ba nhanh ("C"=xoa het, "ten\tso"=them 1)
 #define BLE_CHR_WFCFG_UUID   "6e40000f-b5a3-f393-e0a9-e50e24dcca9e" // phone -> watch: giao dien gio (2 byte: pos, size)
+#define BLE_CHR_REPLY_UUID   "6e400010-b5a3-f393-e0a9-e50e24dcca9e" // phone -> watch: cau tra loi nhanh ("C"=xoa, "text"=them 1)
 
 // The ten / QR badge: so o luu anh QR (240x240 RGB565 trong LittleFS)
 #define QR_COUNT            4

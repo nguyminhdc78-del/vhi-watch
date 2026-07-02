@@ -30,7 +30,7 @@ class SmartwatchService {
   static const _allowedApps = {'zalo', 'orca', 'messenger'};
 
   // Goi tu BleService khi native day thong bao len
-  void handleNotification(String pkg, String title, String text, bool removed) {
+  void handleNotification(String pkg, String title, String text, bool removed, bool canReply) {
     if (!BleService.I.connected) return;
     final p = pkg.toLowerCase();
     if (_musicApps.any((m) => p.contains(m))) {   // nhac -> man Nhac (khong tinh la thong bao)
@@ -40,7 +40,7 @@ class SmartwatchService {
     if (removed) return;
     if (!_allowedApps.any((m) => p.contains(m))) return;   // LOC: chi Zalo + Mess
     if (title.isEmpty && text.isEmpty) return;
-    BleService.I.sendNotify(_appName(p), title, text);
+    BleService.I.sendNotify(_appName(p), title, text, canReply: canReply);
   }
 
   // Rut gon package name -> ten app de doc

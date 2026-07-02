@@ -62,8 +62,18 @@ struct NotifyState {
     char title[88]  = "";
     char text[112]  = "";
     bool hasNew     = false;   // co thong bao moi chua xem
+    bool canReply   = false;   // thong bao nay tra loi nhanh duoc khong
 };
 extern NotifyState g_notify;
+
+// --- Cau tra loi nhanh soan san (dong bo tu app) ---
+#define MAX_REPLIES 8
+struct ReplyBook {
+    char items[MAX_REPLIES][40];
+    int  count = 0;
+    volatile bool updated = false;
+};
+extern ReplyBook g_replies;
 
 // --- Bai hat dang phat ---
 struct MusicState {

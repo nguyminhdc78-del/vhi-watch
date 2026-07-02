@@ -21,7 +21,7 @@ LV_FONT_DECLARE(vn_font_20);
 //    NEXT/PREV = di chuyen, ENTER = chon, ESC = quay lai
 // ============================================================
 
-enum Screen { SCR_WATCH, SCR_MENU, SCR_NAV, SCR_UPLOAD, SCR_NOTIFY, SCR_MUSIC, SCR_REMOTE, SCR_CAMERA, SCR_QR, SCR_FIND, SCR_TIMER, SCR_CALL, SCR_DIAL };
+enum Screen { SCR_WATCH, SCR_MENU, SCR_NAV, SCR_UPLOAD, SCR_NOTIFY, SCR_MUSIC, SCR_REMOTE, SCR_CAMERA, SCR_QR, SCR_FIND, SCR_TIMER, SCR_CALL, SCR_DIAL, SCR_REPLY };
 
 static lv_group_t *g_group   = nullptr;
 static lv_obj_t   *g_scr     = nullptr;   // man hinh hien tai
@@ -66,6 +66,10 @@ static void dial_refresh();
 static int  dialSel = 0;
 static lv_obj_t *dialBtns[MAX_CONTACTS];
 static lv_obj_t *lblDialInfo = nullptr;
+static void reply_refresh();
+static int  replySel = 0;
+static lv_obj_t *replyBtns[MAX_REPLIES];
+static lv_obj_t *lblReplyInfo = nullptr;
 
 // ---------- tien ich ----------
 static lv_obj_t* make_root() {
@@ -406,8 +410,9 @@ static void build_notify(lv_obj_t *scr) {
 
     lv_obj_t *hint = lv_label_create(scr);
     lv_obj_set_style_text_font(hint, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(hint, lv_color_hex(0x555555), 0);
-    lv_label_set_text(hint, "Nhan C = Quay lai");
+    lv_obj_set_style_text_color(hint, lv_color_hex(0x888888), 0);
+    lv_label_set_text(hint, (g_notify.canReply && g_replies.count > 0)
+                            ? "B = Tra loi   C = Quay lai" : "Nhan C = Quay lai");
     lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -8);
 }
 
@@ -695,7 +700,25 @@ static void key_handler(lv_event_t *e) {
             break;
 
         case SCR_NOTIFY:
-            if (key == LV_KEY_ESC) request_screen(SCR_MENU);
+            if (key == LV_KEY_ENTER && g_notify.canReply) request_screen(SCR_REPLY);  // B: tra loi nhanh
+            else if (key == LV_KEY_ESC) request_screen(SCR_MENU);
+            break;
+
+        case SCR_REPLY:
+            if (g_replies.count > 0) {
+                if (key == LV_KEY_DOWN)      { replySel = (replySel + 1) % g_replies.count; reply_refresh(); }
+                else if (key == LV_KEY_UP)   { replySel = (replySel - 1 + g_replies.count) % g_replies.count; reply_refresh(); }
+                else if (key == LV_KEY_ENTER) {                     // B: gui cau tra loi
+                    char cmd[16]; snprintf(cmd, sizeof(cmd), "reply:%d", replySel);
+                    ble_send_media(cmd);
+                    if (lblReplyInfo) {
+                        lv_label_set_text(lblReplyInfo, "Da gui!");
+                        lv_obj_set_style_text_color(lblReplyInfo, lv_color_hex(0x33CC66), 0);
+                    }
+                    g_notify.canReply = false;   // da tra loi
+                }
+            }
+            if (key == LV_KEY_ESC) request_screen(SCR_WATCH);       // C: thoat
             break;
 
         case SCR_MUSIC:
@@ -939,6 +962,66 @@ static void build_dial(lv_obj_t *scr) {
 }
 
 // ============================================================
+//  TRA LOI NHANH (chon cau soan san -> gui ve dien thoai)
+// ============================================================
+static void reply_refresh() {
+    for (int i = 0; i < g_replies.count; i++)
+        lv_obj_set_style_bg_color(replyBtns[i],
+            i == replySel ? lv_color_hex(0x2266FF) : lv_color_hex(0x222222), 0);
+    if (g_replies.count > 0) lv_obj_scroll_to_view(replyBtns[replySel], LV_ANIM_ON);
+}
+
+static void build_reply(lv_obj_t *scr) {
+    if (replySel >= g_replies.count) replySel = 0;
+
+    if (g_replies.count == 0) {
+        lv_obj_t *l = lv_label_create(scr);
+        lv_obj_set_style_text_font(l, &vn_font_16, 0);
+        lv_obj_set_style_text_color(l, lv_color_hex(0xCCCCCC), 0);
+        lv_obj_set_width(l, 210);
+        lv_label_set_long_mode(l, LV_LABEL_LONG_WRAP);
+        lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
+        lv_label_set_text(l, "Chua co cau tra loi.\nMo app -> Tra loi nhanh de them.");
+        lv_obj_center(l);
+        return;
+    }
+
+    lv_obj_t *title = lv_label_create(scr);
+    lv_obj_set_style_text_font(title, &vn_font_16, 0);
+    lv_obj_set_style_text_color(title, lv_color_hex(0x33CC66), 0);
+    lv_label_set_text(title, LV_SYMBOL_EDIT " Tra loi");
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 6);
+
+    lv_obj_t *list = lv_obj_create(scr);
+    lv_obj_set_size(list, 226, 166);
+    lv_obj_align(list, LV_ALIGN_TOP_MID, 0, 30);
+    lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_bg_color(list, lv_color_black(), 0);
+    lv_obj_set_style_border_width(list, 0, 0);
+    lv_obj_set_style_pad_row(list, 6, 0);
+    for (int i = 0; i < g_replies.count; i++) {
+        lv_obj_t *btn = lv_obj_create(list);
+        lv_obj_set_size(btn, lv_pct(100), 38);
+        lv_obj_set_style_radius(btn, 6, 0);
+        lv_obj_set_style_border_width(btn, 0, 0);
+        lv_obj_clear_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_t *l = lv_label_create(btn);
+        lv_obj_set_style_text_font(l, &vn_font_16, 0);
+        lv_obj_set_style_text_color(l, lv_color_white(), 0);
+        lv_label_set_text(l, g_replies.items[i]);
+        lv_obj_align(l, LV_ALIGN_LEFT_MID, 6, 0);
+        replyBtns[i] = btn;
+    }
+
+    lblReplyInfo = lv_label_create(scr);
+    lv_obj_set_style_text_font(lblReplyInfo, &vn_font_16, 0);
+    lv_obj_set_style_text_color(lblReplyInfo, lv_color_hex(0xE5A23B), 0);
+    lv_label_set_text(lblReplyInfo, "A: chon   B: GUI   C: thoat");
+    lv_obj_align(lblReplyInfo, LV_ALIGN_BOTTOM_MID, 0, -6);
+    reply_refresh();
+}
+
+// ============================================================
 //  Chuyen man hinh
 // ============================================================
 static void show_screen(Screen s) {
@@ -951,6 +1034,7 @@ static void show_screen(Screen s) {
     lblTime = lblDate = lblStat = nullptr;
     lblTmrTime = lblTmrMode = nullptr;
     lblDialInfo = nullptr;
+    lblReplyInfo = nullptr;
     navArrow = navDist = navStreet = navEta = nullptr;
     navLine = navDot = nullptr;
     lblNApp = lblNTitle = lblNText = nullptr;
@@ -981,6 +1065,7 @@ static void show_screen(Screen s) {
         case SCR_TIMER:  build_timer(g_scr);     break;
         case SCR_CALL:   build_call(g_scr);      break;
         case SCR_DIAL:   build_dial(g_scr);      break;
+        case SCR_REPLY:  build_reply(g_scr);     break;
     }
 
     lv_scr_load(g_scr);
@@ -1054,6 +1139,12 @@ void ui_tick() {
     if (g_contacts.updated) {
         g_contacts.updated = false;
         if (g_cur == SCR_DIAL) request_screen(SCR_DIAL);
+    }
+
+    // Cau tra loi nhanh vua dong bo -> ve lai neu dang mo
+    if (g_replies.updated) {
+        g_replies.updated = false;
+        if (g_cur == SCR_REPLY) request_screen(SCR_REPLY);
     }
 
     // Co thong bao moi -> tu mo man Thong bao (khi dang o man dong ho, khong phai luc co cuoc goi)

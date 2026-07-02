@@ -50,7 +50,8 @@ class BleService extends ChangeNotifier {
           a?['pkg']?.toString() ?? '',
           a?['title']?.toString() ?? '',
           a?['text']?.toString() ?? '',
-          a?['removed'] == true);
+          a?['removed'] == true,
+          a?['canReply'] == true);
       }
       return null;
     });
@@ -73,11 +74,16 @@ class BleService extends ChangeNotifier {
   static const _callUuid    = "6e40000d-b5a3-f393-e0a9-e50e24dcca9e";
   static const _contactUuid = "6e40000e-b5a3-f393-e0a9-e50e24dcca9e";
   static const _wfcfgUuid   = "6e40000f-b5a3-f393-e0a9-e50e24dcca9e";
+  static const _replyUuid   = "6e400010-b5a3-f393-e0a9-e50e24dcca9e";
 
   static const _mediaCh = MethodChannel('vhi/media'); // gui phim media Android
 
   BluetoothDevice? _device;
-  BluetoothCharacteristic? _nav, _time, _stat, _wp, _route, _notify, _music, _media, _color, _imgsel, _weather, _call, _contact, _wfcfg;
+  BluetoothCharacteristic? _nav, _time, _stat, _wp, _route, _notify, _music, _media, _color, _imgsel, _weather, _call, _contact, _wfcfg, _reply;
+
+  // Cau tra loi nhanh soan san (WITH dau; hien tren dong ho da bo dau)
+  List<String> quickReplies = [];
+  static const int maxReplies = 8;
 
   // Giao dien gio: vi tri (0=tren,1=giua,2=duoi) + co gio (3..6) + ngay (co/mau/an-hien)
   int wfPos = 1;
@@ -132,6 +138,7 @@ class BleService extends ChangeNotifier {
   void autoConnectStart() {
     autoReconnect = true;
     loadFavorites();   // nap danh ba nhanh da luu
+    loadReplies();     // nap cau tra loi nhanh
     loadWfCfg();       // nap cau hinh giao dien gio
     connect();         // startService goi SAU khi ket noi (da co quyen BLE) de tranh crash FGS
   }
@@ -243,6 +250,7 @@ class BleService extends ChangeNotifier {
             else if (u == _callUuid) _call = c;
             else if (u == _contactUuid) _contact = c;
             else if (u == _wfcfgUuid) _wfcfg = c;
+            else if (u == _replyUuid) _reply = c;
           }
         }
       }
@@ -268,7 +276,7 @@ class BleService extends ChangeNotifier {
       _mediaCh.invokeMethod('watchCalls').catchError((_) {});   // theo doi cuoc goi SIM
       // Dời việc nặng (thời tiết + danh bạ) ra sau vài giây cho link ổn định truoc
       Future.delayed(const Duration(seconds: 3), () {
-        if (connected) { _startWeatherLoop(); syncContacts(); }
+        if (connected) { _startWeatherLoop(); syncContacts(); syncReplies(); }
         // KHONG gui wfcfg khi ket noi (dong ho da tu nho) -> tranh nhay ve mat So lon moi lan noi
       });
     } catch (e) {
@@ -296,7 +304,7 @@ class BleService extends ChangeNotifier {
     _statSub?.cancel();  _statSub = null;
     _connSub?.cancel();  _connSub = null;   // huy listener cu -> khong chong cheo
     _weatherTimer?.cancel();
-    _nav = _time = _stat = _wp = _route = _notify = _music = _media = _color = _imgsel = _weather = _call = _contact = _wfcfg = null;
+    _nav = _time = _stat = _wp = _route = _notify = _music = _media = _color = _imgsel = _weather = _call = _contact = _wfcfg = _reply = null;
     status = autoReconnect ? 'Mất kết nối - đang kết nối lại...' : 'Mất kết nối';
     notifyListeners();
     _scheduleReconnect();   // tu dong ket noi lai (vd dong ho ngu/bat lai)
@@ -326,6 +334,14 @@ class BleService extends ChangeNotifier {
     if (cmd.startsWith('dial:')) {
       final num = cmd.substring(5);
       _mediaCh.invokeMethod('dialNumber', {'number': num}).catchError((_) {});
+      return;
+    }
+    // Tra loi nhanh: "reply:<i>" -> gui cau tra loi thu i (WITH dau) vao tin nhan
+    if (cmd.startsWith('reply:')) {
+      final i = int.tryParse(cmd.substring(6)) ?? -1;
+      if (i >= 0 && i < quickReplies.length) {
+        _mediaCh.invokeMethod('sendReply', {'text': quickReplies[i]}).catchError((_) {});
+      }
       return;
     }
     // Lenh nhac -> bam phim media he thong
@@ -503,6 +519,42 @@ class BleService extends ChangeNotifier {
     try { await _mediaCh.invokeMethod('openOverlay'); } catch (_) {}
   }
 
+  // --- Cau tra loi nhanh ---
+  Future<void> loadReplies() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      final raw = sp.getStringList('quickReplies');
+      if (raw != null) { quickReplies = raw; notifyListeners(); }
+      else { quickReplies = ['OK', 'Đang bận, gọi lại sau', 'Đang tới', 'Ừ']; }
+    } catch (_) {}
+  }
+  Future<void> _saveReplies() async {
+    try { final sp = await SharedPreferences.getInstance(); await sp.setStringList('quickReplies', quickReplies); } catch (_) {}
+  }
+  Future<void> addReply(String s) async {
+    s = s.trim();
+    if (s.isEmpty || quickReplies.length >= maxReplies) return;
+    quickReplies.add(s);
+    await _saveReplies(); notifyListeners(); await syncReplies();
+  }
+  Future<void> removeReply(int i) async {
+    if (i < 0 || i >= quickReplies.length) return;
+    quickReplies.removeAt(i);
+    await _saveReplies(); notifyListeners(); await syncReplies();
+  }
+  // Gui danh sach cau tra loi xuong dong ho (da bo dau de hien; goi bang index)
+  Future<void> syncReplies() async {
+    if (_reply == null) return;
+    try {
+      await _reply!.write(utf8.encode('C'), withoutResponse: true);
+      await Future.delayed(const Duration(milliseconds: 40));
+      for (final r in quickReplies) {
+        await _reply!.write(utf8.encode(_clipBytes(vnNoAccent(r), 38)), withoutResponse: true);
+        await Future.delayed(const Duration(milliseconds: 40));
+      }
+    } catch (_) {}
+  }
+
   // Chon 1 lien he tu danh ba dien thoai (native contact picker)
   Future<void> pickFromContacts() async {
     try {
@@ -531,12 +583,13 @@ class BleService extends ChangeNotifier {
   }
 
   // Gui thong bao xuong dong ho
-  Future<void> sendNotify(String app, String title, String text) async {
+  Future<void> sendNotify(String app, String title, String text, {bool canReply = false}) async {
     if (_notify == null) return;
     final js = jsonEncode({
       'app': _clipBytes(app, 22),
       'title': _clipBytes(title, 80),
       'text': _clipBytes(text, 96),
+      'r': (canReply && quickReplies.isNotEmpty) ? 1 : 0,
     });
     try { await _notify!.write(utf8.encode(js), withoutResponse: true); } catch (_) {}
   }

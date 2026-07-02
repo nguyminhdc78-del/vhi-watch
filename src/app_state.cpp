@@ -12,6 +12,7 @@ int8_t        g_routeXY[MAX_ROUTE_PTS * 2];
 volatile bool g_routeDirty = false;
 
 NotifyState g_notify;
+ReplyBook   g_replies;
 MusicState  g_music;
 uint8_t      g_uiR = 255, g_uiG = 255, g_uiB = 255;
 volatile bool g_colorChanged = false;

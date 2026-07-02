@@ -130,6 +130,7 @@ class NotifyCB : public NimBLECharacteristicCallbacks {
         strlcpy(g_notify.app,   doc["app"]   | "", sizeof(g_notify.app));
         strlcpy(g_notify.title, doc["title"] | "", sizeof(g_notify.title));
         strlcpy(g_notify.text,  doc["text"]  | "", sizeof(g_notify.text));
+        g_notify.canReply = (doc["r"] | 0) != 0;   // co tra loi nhanh duoc khong
         g_notify.hasNew = true;
         g_lastInputMs = millis();   // giu thuc de doc thong bao
     }
@@ -235,6 +236,18 @@ class WfCfgCB : public NimBLECharacteristicCallbacks {
     }
 };
 
+// Cau tra loi nhanh: "C" = xoa het; "text" = them 1 cau
+class ReplyCB : public NimBLECharacteristicCallbacks {
+    void onWrite(NimBLECharacteristic *c) override {
+        std::string v = c->getValue();
+        if (v.size() == 1 && v[0] == 'C') { g_replies.count = 0; g_replies.updated = true; return; }
+        if (g_replies.count >= MAX_REPLIES) return;
+        strlcpy(g_replies.items[g_replies.count], v.c_str(), sizeof(g_replies.items[0]));
+        g_replies.count++;
+        g_replies.updated = true;
+    }
+};
+
 static NimBLECharacteristic *chrMedia = nullptr;
 
 void ble_init() {
@@ -310,6 +323,11 @@ void ble_init() {
         svc->createCharacteristic(BLE_CHR_WFCFG_UUID,
                                   NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
     chrWfCfg->setCallbacks(new WfCfgCB());
+
+    NimBLECharacteristic *chrReply =
+        svc->createCharacteristic(BLE_CHR_REPLY_UUID,
+                                  NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
+    chrReply->setCallbacks(new ReplyCB());
 
     svc->start();
 

@@ -122,6 +122,7 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
             ),
+            const _QuickReplyCard(),
             const _WeatherCard(),
             Card(
               child: Padding(
@@ -179,6 +180,76 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
       );
+}
+
+// Thẻ soạn câu trả lời nhanh — chọn trên đồng hồ để rep tin Zalo/Mess
+class _QuickReplyCard extends StatelessWidget {
+  const _QuickReplyCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final ble = BleService.I;
+    return ListenableBuilder(
+      listenable: ble,
+      builder: (context, _) => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Trả lời nhanh',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 4),
+              Text(
+                'Soạn sẵn câu trả lời. Khi có tin Zalo/Mess, trên đồng hồ bấm B → chọn câu → gửi. Tối đa ${BleService.maxReplies} câu.',
+                style: TextStyle(color: Colors.grey[400], fontSize: 13),
+              ),
+              const SizedBox(height: 8),
+              for (int i = 0; i < ble.quickReplies.length; i++)
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.chat_bubble_outline, size: 20),
+                  title: Text(ble.quickReplies[i]),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                    onPressed: () => ble.removeReply(i),
+                  ),
+                ),
+              const SizedBox(height: 4),
+              OutlinedButton.icon(
+                onPressed: ble.quickReplies.length >= BleService.maxReplies
+                    ? null
+                    : () => _addReply(context),
+                icon: const Icon(Icons.add),
+                label: const Text('Thêm câu trả lời'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addReply(BuildContext context) async {
+    final c = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Câu trả lời'),
+        content: TextField(
+          controller: c,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'VD: Đang bận, gọi lại sau'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Huỷ')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Thêm')),
+        ],
+      ),
+    );
+    if (ok == true) await BleService.I.addReply(c.text);
+  }
 }
 
 // Thẻ tuỳ chỉnh giao diện giờ (vị trí + cỡ) — cho khỏi che ảnh nền

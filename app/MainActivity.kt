@@ -6,7 +6,9 @@ import android.app.NotificationManager
 import android.Manifest
 import android.app.Activity
 import android.app.PendingIntent
+import android.app.RemoteInput
 import android.app.Service
+import android.os.Bundle
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -199,6 +201,10 @@ class MainActivity : FlutterActivity() {
                         == PackageManager.PERMISSION_GRANTED)
                 }
                 "watchCalls" -> { watchCallState(); result.success(true) }
+                "sendReply" -> {
+                    CallListener.sendReply(applicationContext, call.argument<String>("text") ?: "")
+                    result.success(true)
+                }
                 "openNotifAccess" -> {
                     val i = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
                     i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -299,9 +305,24 @@ class CallListener : NotificationListenerService() {
         private var declinePI: PendingIntent? = null
         private var currentKey: String? = null
         private val lastSent = HashMap<String, String>()   // key -> "title|text" gan nhat (chong dội)
+        private var replyPI: PendingIntent? = null
+        private var replyRemoteInput: RemoteInput? = null
 
         fun answer() { try { answerPI?.send() } catch (_: Exception) {} }
         fun reject() { try { declinePI?.send() } catch (_: Exception) {} }
+
+        // Tra loi nhanh: bo text vao RemoteInput roi kich hoat nut Reply cua thong bao
+        fun sendReply(ctx: Context, text: String) {
+            val pi = replyPI ?: return
+            val ri = replyRemoteInput ?: return
+            try {
+                val intent = Intent()
+                val results = Bundle()
+                results.putCharSequence(ri.resultKey, text)
+                RemoteInput.addResultsToIntent(arrayOf(ri), intent, results)
+                pi.send(ctx, 0, intent)
+            } catch (_: Exception) {}
+        }
     }
 
     // Chuyen tiep thong bao tin nhan len dong ho (da co dedup + bo ongoing nen nhe).
@@ -346,13 +367,25 @@ class CallListener : NotificationListenerService() {
             if (lines != null && lines.isNotEmpty()) text = lines.last().toString()
         }
         if (title.isEmpty() && text.isEmpty()) return
+        // Tim nut "Tra loi" (co o nhap text) de tra loi nhanh tu dong ho
+        var canReply = false
+        val acts = n.actions
+        if (acts != null) {
+            for (a in acts) {
+                val ri = a.remoteInputs?.firstOrNull { it.allowFreeFormInput }
+                if (ri != null && a.actionIntent != null) {
+                    replyPI = a.actionIntent; replyRemoteInput = ri; canReply = true; break
+                }
+            }
+        }
         // Chong dội: cùng noi dung -> khong gui lai (nhieu app cap nhat thong bao lien tuc)
         val sig = "$title|$text"
         if (lastSent[sbn.key] == sig) return
         lastSent[sbn.key] = sig
         if (lastSent.size > 60) lastSent.clear()
         notifyFlutter("notification", mapOf(
-            "pkg" to sbn.packageName, "title" to title, "text" to text, "removed" to false))
+            "pkg" to sbn.packageName, "title" to title, "text" to text,
+            "removed" to false, "canReply" to canReply))
     }
 
     private fun handleCall(sbn: StatusBarNotification, n: Notification) {
