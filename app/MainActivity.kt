@@ -317,7 +317,21 @@ class CallListener : NotificationListenerService() {
         if ((n.flags and Notification.FLAG_ONGOING_EVENT) != 0 && !isMedia) return
         val ex = n.extras
         val title = ex.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
-        var text = ex.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
+        var text = ""
+        // Zalo/Mess dung MessagingStyle: tin nhan nam o EXTRA_MESSAGES (lay tin cuoi)
+        try {
+            @Suppress("DEPRECATION")
+            val msgs = ex.getParcelableArray(Notification.EXTRA_MESSAGES)
+            if (msgs != null && msgs.isNotEmpty()) {
+                val last = msgs.last()
+                if (last is android.os.Bundle) {
+                    val body = last.getCharSequence("text")?.toString() ?: ""
+                    val sender = last.getCharSequence("sender")?.toString() ?: ""
+                    text = if (sender.isNotEmpty() && sender != title) "$sender: $body" else body
+                }
+            }
+        } catch (_: Exception) {}
+        if (text.isEmpty()) text = ex.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
         if (text.isEmpty()) text = ex.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString() ?: ""
         if (text.isEmpty()) {
             val lines = ex.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)

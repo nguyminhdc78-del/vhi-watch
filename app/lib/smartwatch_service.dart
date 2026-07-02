@@ -24,15 +24,19 @@ class SmartwatchService {
     try { await _ch.invokeMethod('openNotifAccess'); } catch (_) {}
   }
 
+  // Chi cac app duoc phep hien thong bao len dong ho (theo yeu cau: Zalo + Messenger)
+  static const _allowedApps = {'zalo', 'orca', 'messenger'};
+
   // Goi tu BleService khi native day thong bao len
   void handleNotification(String pkg, String title, String text, bool removed) {
     if (!BleService.I.connected) return;
     final p = pkg.toLowerCase();
-    if (_musicApps.any((m) => p.contains(m))) {
+    if (_musicApps.any((m) => p.contains(m))) {   // nhac -> man Nhac (khong tinh la thong bao)
       BleService.I.sendMusic(title, text, !removed);
       return;
     }
     if (removed) return;
+    if (!_allowedApps.any((m) => p.contains(m))) return;   // LOC: chi Zalo + Mess
     if (title.isEmpty && text.isEmpty) return;
     BleService.I.sendNotify(_appName(p), title, text);
   }
