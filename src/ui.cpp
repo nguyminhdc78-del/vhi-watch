@@ -154,16 +154,18 @@ static void wf_face_big() {
 // --- Mat 1: LICH - ngay to o giua, gio nho o tren ---
 static void wf_face_date() {
     wf_clear_band(40, 176);
-    char tb[8] = "--:--", dd[8] = "--/--", wk[8] = "";
+    char tb[8] = "--:--", db[16] = "";
+    char wk[12] = "";
+    static const char *WD2[] = {"Chu Nhat", "Thu Hai", "Thu Ba", "Thu Tu", "Thu Nam", "Thu Sau", "Thu Bay"};
     struct tm tm;
     if (wf_get_time(tm)) {
         snprintf(tb, sizeof(tb), "%02d:%02d", tm.tm_hour, tm.tm_min);
-        snprintf(dd, sizeof(dd), "%02d/%02d", tm.tm_mday, tm.tm_mon + 1);
-        snprintf(wk, sizeof(wk), "%s", WF_WD[tm.tm_wday]);
+        snprintf(db, sizeof(db), "%02d/%02d/%04d", tm.tm_mday, tm.tm_mon + 1, tm.tm_year + 1900);
+        snprintf(wk, sizeof(wk), "%s", WD2[tm.tm_wday]);
     }
-    display_text_center(120, 50, tb, ui_color565(), 4);
-    display_text_center(120, 104, dd, 0xFFFF, 5);
-    display_text_center(120, 170, wk, 0xAD55, 3);
+    display_text_center(120, 66, tb, ui_color565(), 5);   // GIO to nhat (doi mau duoc)
+    display_text_center(120, 126, wk, 0xAD55, 3);          // thu
+    display_text_center(120, 168, db, 0xFFFF, 2);          // ngay/thang/nam
 }
 
 // --- Mat 2: KIM (analog) ---
