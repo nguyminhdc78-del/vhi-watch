@@ -126,16 +126,16 @@ static void wf_clear_band(int y0, int h) {
 }
 
 static void draw_wf_status() {
-    wf_clear_band(0, 22);
-    char s[64];
-    if (g_weather.has)
-        snprintf(s, sizeof(s), "%s  %d%%   %dC %s",
-                 g_sys.bleConnected ? "BLE" : "X", g_sys.battPercent,
-                 g_weather.temp, g_weather.text);
-    else
-        snprintf(s, sizeof(s), "%s  %d%%",
-                 g_sys.bleConnected ? "BLE" : "Cho ket noi", g_sys.battPercent);
-    display_text_center(SCREEN_W / 2, 4, s, 0x5E8C, 1);
+    wf_clear_band(0, 40);
+    char s[40];
+    snprintf(s, sizeof(s), "%s  %d%%",
+             g_sys.bleConnected ? "BLE" : "Cho ket noi", g_sys.battPercent);
+    display_text_center(SCREEN_W / 2, 2, s, 0x5E8C, 1);
+    if (g_weather.has) {
+        char w[24];
+        snprintf(w, sizeof(w), "%dC  %s", g_weather.temp, g_weather.text);
+        display_text_center(SCREEN_W / 2, 20, w, 0x0000, 2);   // to hon + mau den
+    }
 }
 
 // --- Mat 0: so gio LON o giua ---
@@ -168,7 +168,7 @@ static void wf_face_date() {
 
 // --- Mat 2: KIM (analog) ---
 static void wf_face_analog() {
-    wf_clear_band(24, 216);
+    wf_clear_band(40, 200);
     const int cx = 120, cy = 126, R = 86;
     uint16_t col = ui_color565();
     display_draw_circle(cx, cy, R, col);
