@@ -321,11 +321,13 @@ class CallListener : NotificationListenerService() {
         val ex = n.extras
         val title = ex.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
         var text = ""
+        var hasMessages = false
         // Zalo/Mess dung MessagingStyle: tin nhan nam o EXTRA_MESSAGES (lay tin cuoi)
         try {
             @Suppress("DEPRECATION")
             val msgs = ex.getParcelableArray(Notification.EXTRA_MESSAGES)
             if (msgs != null && msgs.isNotEmpty()) {
+                hasMessages = true
                 val last = msgs.last()
                 if (last is android.os.Bundle) {
                     val body = last.getCharSequence("text")?.toString() ?: ""
@@ -334,6 +336,9 @@ class CallListener : NotificationListenerService() {
                 }
             }
         } catch (_: Exception) {}
+        // CHI giu TIN NHAN THAT (MessagingStyle hoac category MESSAGE) -> bo thong bao dich vu
+        // nhu "Chat heads active", "Start a conversation"...
+        if (!hasMessages && n.category != Notification.CATEGORY_MESSAGE) return
         if (text.isEmpty()) text = ex.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
         if (text.isEmpty()) text = ex.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString() ?: ""
         if (text.isEmpty()) {
