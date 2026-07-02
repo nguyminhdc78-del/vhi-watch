@@ -411,7 +411,7 @@ static void build_notify(lv_obj_t *scr) {
     lv_obj_t *hint = lv_label_create(scr);
     lv_obj_set_style_text_font(hint, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(hint, lv_color_hex(0x888888), 0);
-    lv_label_set_text(hint, (g_notify.canReply && g_replies.count > 0)
+    lv_label_set_text(hint, g_replies.count > 0
                             ? "B = Tra loi   C = Quay lai" : "Nhan C = Quay lai");
     lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -8);
 }
@@ -700,7 +700,7 @@ static void key_handler(lv_event_t *e) {
             break;
 
         case SCR_NOTIFY:
-            if (key == LV_KEY_ENTER && g_notify.canReply) request_screen(SCR_REPLY);  // B: tra loi nhanh
+            if (key == LV_KEY_ENTER) request_screen(SCR_REPLY);   // B: mo danh sach cau tra loi
             else if (key == LV_KEY_ESC) request_screen(SCR_MENU);
             break;
 
@@ -709,13 +709,18 @@ static void key_handler(lv_event_t *e) {
                 if (key == LV_KEY_DOWN)      { replySel = (replySel + 1) % g_replies.count; reply_refresh(); }
                 else if (key == LV_KEY_UP)   { replySel = (replySel - 1 + g_replies.count) % g_replies.count; reply_refresh(); }
                 else if (key == LV_KEY_ENTER) {                     // B: gui cau tra loi
-                    char cmd[16]; snprintf(cmd, sizeof(cmd), "reply:%d", replySel);
-                    ble_send_media(cmd);
-                    if (lblReplyInfo) {
-                        lv_label_set_text(lblReplyInfo, "Da gui!");
-                        lv_obj_set_style_text_color(lblReplyInfo, lv_color_hex(0x33CC66), 0);
+                    if (g_notify.canReply) {
+                        char cmd[16]; snprintf(cmd, sizeof(cmd), "reply:%d", replySel);
+                        ble_send_media(cmd);
+                        g_notify.canReply = false;                  // da tra loi
+                        if (lblReplyInfo) {
+                            lv_label_set_text(lblReplyInfo, "Da gui!");
+                            lv_obj_set_style_text_color(lblReplyInfo, lv_color_hex(0x33CC66), 0);
+                        }
+                    } else if (lblReplyInfo) {                       // app khong ho tro tra loi nhanh (vd Zalo)
+                        lv_label_set_text(lblReplyInfo, "App nay ko ho tro tra loi");
+                        lv_obj_set_style_text_color(lblReplyInfo, lv_color_hex(0xFF5555), 0);
                     }
-                    g_notify.canReply = false;   // da tra loi
                 }
             }
             if (key == LV_KEY_ESC) request_screen(SCR_WATCH);       // C: thoat
