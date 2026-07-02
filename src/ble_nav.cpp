@@ -216,6 +216,19 @@ class ContactsCB : public NimBLECharacteristicCallbacks {
     }
 };
 
+// Giao dien gio: 2 byte [pos(0-2), size(3-6)]
+class WfCfgCB : public NimBLECharacteristicCallbacks {
+    void onWrite(NimBLECharacteristic *c) override {
+        std::string v = c->getValue();
+        if (v.size() >= 2) {
+            uint8_t p = (uint8_t)v[0], s = (uint8_t)v[1];
+            if (p <= 2) g_wfPos = p;
+            if (s >= 3 && s <= 6) g_wfSize = s;
+            g_wfCfgChanged = true;
+        }
+    }
+};
+
 static NimBLECharacteristic *chrMedia = nullptr;
 
 void ble_init() {
@@ -286,6 +299,11 @@ void ble_init() {
         svc->createCharacteristic(BLE_CHR_CONTACT_UUID,
                                   NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
     chrContact->setCallbacks(new ContactsCB());
+
+    NimBLECharacteristic *chrWfCfg =
+        svc->createCharacteristic(BLE_CHR_WFCFG_UUID,
+                                  NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
+    chrWfCfg->setCallbacks(new WfCfgCB());
 
     svc->start();
 

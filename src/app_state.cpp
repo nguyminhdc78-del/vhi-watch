@@ -16,6 +16,9 @@ MusicState  g_music;
 uint8_t      g_uiR = 255, g_uiG = 255, g_uiB = 255;
 volatile bool g_colorChanged = false;
 volatile bool g_colorSave = false;
+uint8_t       g_wfPos = 1;    // giua
+uint8_t       g_wfSize = 4;   // vua
+volatile bool g_wfCfgChanged = false;
 WeatherState g_weather;
 CallState g_call;
 ContactBook g_contacts;

@@ -162,6 +162,7 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
             ),
+            const _WatchfaceCard(),
           ],
         );
       },
@@ -178,6 +179,55 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
       );
+}
+
+// Thẻ tuỳ chỉnh giao diện giờ (vị trí + cỡ) — cho khỏi che ảnh nền
+class _WatchfaceCard extends StatelessWidget {
+  const _WatchfaceCard();
+  @override
+  Widget build(BuildContext context) {
+    final ble = BleService.I;
+    return ListenableBuilder(
+      listenable: ble,
+      builder: (context, _) => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Giao diện giờ (mặt Số lớn)',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 4),
+              Text('Chỉnh vị trí & cỡ giờ để không che ảnh nền.',
+                  style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+              const SizedBox(height: 12),
+              const Text('Vị trí', style: TextStyle(color: Colors.grey)),
+              const SizedBox(height: 6),
+              Wrap(spacing: 8, children: [
+                for (final p in const [[0, 'Trên'], [1, 'Giữa'], [2, 'Dưới']])
+                  ChoiceChip(
+                    label: Text(p[1] as String),
+                    selected: ble.wfPos == p[0],
+                    onSelected: (_) => ble.setWfLayout(pos: p[0] as int),
+                  ),
+              ]),
+              const SizedBox(height: 12),
+              const Text('Cỡ giờ', style: TextStyle(color: Colors.grey)),
+              const SizedBox(height: 6),
+              Wrap(spacing: 8, children: [
+                for (final s in const [[3, 'Nhỏ'], [4, 'Vừa'], [5, 'To'], [6, 'Rất to']])
+                  ChoiceChip(
+                    label: Text(s[1] as String),
+                    selected: ble.wfSize == s[0],
+                    onSelected: (_) => ble.setWfLayout(size: s[0] as int),
+                  ),
+              ]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // Thẻ thời tiết: hiện nhiệt độ hiện tại + đổi thành phố

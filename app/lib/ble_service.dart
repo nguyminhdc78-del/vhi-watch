@@ -72,11 +72,16 @@ class BleService extends ChangeNotifier {
   static const _weatherUuid = "6e40000c-b5a3-f393-e0a9-e50e24dcca9e";
   static const _callUuid    = "6e40000d-b5a3-f393-e0a9-e50e24dcca9e";
   static const _contactUuid = "6e40000e-b5a3-f393-e0a9-e50e24dcca9e";
+  static const _wfcfgUuid   = "6e40000f-b5a3-f393-e0a9-e50e24dcca9e";
 
   static const _mediaCh = MethodChannel('vhi/media'); // gui phim media Android
 
   BluetoothDevice? _device;
-  BluetoothCharacteristic? _nav, _time, _stat, _wp, _route, _notify, _music, _media, _color, _imgsel, _weather, _call, _contact;
+  BluetoothCharacteristic? _nav, _time, _stat, _wp, _route, _notify, _music, _media, _color, _imgsel, _weather, _call, _contact, _wfcfg;
+
+  // Giao dien gio: vi tri (0=tren,1=giua,2=duoi) + co (3..6)
+  int wfPos = 1;
+  int wfSize = 4;
 
   // Danh ba nhanh (goi tu dong ho). Moi item: {'name':.., 'number':..}
   List<Map<String, String>> favorites = [];
@@ -124,6 +129,7 @@ class BleService extends ChangeNotifier {
   void autoConnectStart() {
     autoReconnect = true;
     loadFavorites();   // nap danh ba nhanh da luu
+    loadWfCfg();       // nap cau hinh giao dien gio
     connect();         // startService goi SAU khi ket noi (da co quyen BLE) de tranh crash FGS
   }
 
@@ -233,6 +239,7 @@ class BleService extends ChangeNotifier {
             else if (u == _weatherUuid) _weather = c;
             else if (u == _callUuid) _call = c;
             else if (u == _contactUuid) _contact = c;
+            else if (u == _wfcfgUuid) _wfcfg = c;
           }
         }
       }
@@ -258,7 +265,7 @@ class BleService extends ChangeNotifier {
       _mediaCh.invokeMethod('watchCalls').catchError((_) {});   // theo doi cuoc goi SIM
       // Dời việc nặng (thời tiết + danh bạ) ra sau vài giây cho link ổn định truoc
       Future.delayed(const Duration(seconds: 3), () {
-        if (connected) { _startWeatherLoop(); syncContacts(); }
+        if (connected) { _startWeatherLoop(); syncContacts(); sendWfCfg(); }
       });
     } catch (e) {
       busy = false;
@@ -285,7 +292,7 @@ class BleService extends ChangeNotifier {
     _statSub?.cancel();  _statSub = null;
     _connSub?.cancel();  _connSub = null;   // huy listener cu -> khong chong cheo
     _weatherTimer?.cancel();
-    _nav = _time = _stat = _wp = _route = _notify = _music = _media = _color = _imgsel = _weather = _call = _contact = null;
+    _nav = _time = _stat = _wp = _route = _notify = _music = _media = _color = _imgsel = _weather = _call = _contact = _wfcfg = null;
     status = autoReconnect ? 'Mất kết nối - đang kết nối lại...' : 'Mất kết nối';
     notifyListeners();
     _scheduleReconnect();   // tu dong ket noi lai (vd dong ho ngu/bat lai)
@@ -336,6 +343,31 @@ class BleService extends ChangeNotifier {
     try {
       await _color!.write([r & 0xff, g & 0xff, b & 0xff], withoutResponse: true);
     } catch (_) {}
+  }
+
+  // --- Giao dien gio (vi tri + co) ---
+  Future<void> loadWfCfg() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      wfPos = sp.getInt('wfPos') ?? 1;
+      wfSize = sp.getInt('wfSize') ?? 4;
+      notifyListeners();
+    } catch (_) {}
+  }
+  Future<void> sendWfCfg() async {
+    if (_wfcfg == null) return;
+    try { await _wfcfg!.write([wfPos & 0xff, wfSize & 0xff], withoutResponse: true); } catch (_) {}
+  }
+  Future<void> setWfLayout({int? pos, int? size}) async {
+    if (pos != null) wfPos = pos;
+    if (size != null) wfSize = size;
+    notifyListeners();
+    try {
+      final sp = await SharedPreferences.getInstance();
+      await sp.setInt('wfPos', wfPos);
+      await sp.setInt('wfSize', wfSize);
+    } catch (_) {}
+    await sendWfCfg();
   }
 
   // --- Thoi tiet ---

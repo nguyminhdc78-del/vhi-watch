@@ -138,17 +138,26 @@ static void draw_wf_status() {
     }
 }
 
-// --- Mat 0: so gio LON o giua ---
+// --- Mat 0: so gio LON, vi tri + co chinh duoc tu app ---
 static void wf_face_big() {
-    wf_clear_band(86, 78);
+    int sz = g_wfSize; if (sz < 3) sz = 3; if (sz > 6) sz = 6;
+    int timeH = sz * 8;           // chieu cao chu gio (font 8px * size)
+    int blockH = timeH + 6 + 16;  // gio + khoang cach + ngay (size 2 = 16px)
+    int top;
+    if (g_wfPos == 0)      top = 46;                 // TREN (duoi thanh trang thai)
+    else if (g_wfPos == 2) top = 232 - blockH;       // DUOI
+    else                   top = (240 - blockH) / 2 + 8;  // GIUA
+    if (top < 44) top = 44;
+
+    wf_clear_band(top - 2, blockH + 4);
     char tb[8] = "--:--", db[24] = "";
     struct tm tm;
     if (wf_get_time(tm)) {
         snprintf(tb, sizeof(tb), "%02d:%02d", tm.tm_hour, tm.tm_min);
         snprintf(db, sizeof(db), "%s %02d/%02d", WF_WD[tm.tm_wday], tm.tm_mday, tm.tm_mon + 1);
     }
-    display_text_center(120, 98, tb, ui_color565(), 4);
-    display_text_center(120, 142, db, 0xAD55, 2);
+    display_text_center(120, top, tb, ui_color565(), sz);
+    display_text_center(120, top + timeH + 4, db, 0xAD55, 2);
 }
 
 // --- Mat 1: LICH - ngay to o giua, gio nho o tren ---
@@ -992,6 +1001,16 @@ void ui_init(lv_group_t *group) {
         if (cf.size() >= 3) { g_uiR = cf.read(); g_uiG = cf.read(); g_uiB = cf.read(); }
         cf.close();
     }
+    // Nap giao dien gio da luu (vi tri + co)
+    File wf = LittleFS.open("/wfcfg.dat", "r");
+    if (wf) {
+        if (wf.size() >= 2) {
+            int p = wf.read(), s = wf.read();
+            if (p >= 0 && p <= 2) g_wfPos = p;
+            if (s >= 3 && s <= 6) g_wfSize = s;
+        }
+        wf.close();
+    }
     show_screen(SCR_WATCH);
 }
 
@@ -1030,6 +1049,14 @@ void ui_tick() {
     if (g_colorChanged) {
         g_colorChanged = false;
         if (g_cur == SCR_WATCH) draw_wf_time();
+    }
+
+    // Doi giao dien gio (vi tri/co) tu app -> luu flash + ve lai toan bo
+    if (g_wfCfgChanged) {
+        g_wfCfgChanged = false;
+        File f = LittleFS.open("/wfcfg.dat", "w");
+        if (f) { uint8_t d[2] = {g_wfPos, g_wfSize}; f.write(d, 2); f.close(); }
+        if (g_cur == SCR_WATCH) { wfLastMin = -2; draw_wf_full(); }
     }
 
     // Cap nhat mat dong ho (ve lai khi doi phut hoac doi trang thai)
