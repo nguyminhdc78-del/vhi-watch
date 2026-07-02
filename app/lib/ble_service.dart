@@ -124,8 +124,7 @@ class BleService extends ChangeNotifier {
   void autoConnectStart() {
     autoReconnect = true;
     loadFavorites();   // nap danh ba nhanh da luu
-    _mediaCh.invokeMethod('startService').catchError((_) {});   // giu ket noi khi app o nen
-    connect();
+    connect();         // startService goi SAU khi ket noi (da co quyen BLE) de tranh crash FGS
   }
 
   // Hen gio thu ket noi lai (khi dong ho tat/ngoai tam song se thu lai lien tuc)
@@ -216,7 +215,7 @@ class BleService extends ChangeNotifier {
         await dev.requestMtu(247); // MTU lon -> gui anh nen qua BLE nhanh hon
       } catch (_) {}
 
-      final services = await dev.discoverServices();
+      final services = await dev.discoverServices().timeout(const Duration(seconds: 15));
       for (final s in services) {
         if (s.uuid.toString().toLowerCase() == _svc) {
           for (final c in s.characteristics) {
@@ -254,6 +253,7 @@ class BleService extends ChangeNotifier {
       deviceName = dev.platformName;
       status = 'Đã kết nối: ${dev.platformName}';
       notifyListeners();
+      _mediaCh.invokeMethod('startService').catchError((_) {});  // giu ket noi nen (da co quyen BLE)
       await syncTime();
       _mediaCh.invokeMethod('watchCalls').catchError((_) {});   // theo doi cuoc goi SIM
       // Dời việc nặng (thời tiết + danh bạ) ra sau vài giây cho link ổn định truoc
@@ -279,7 +279,11 @@ class BleService extends ChangeNotifier {
 
   void _onDisconnect() {
     connected = false;
-    _mediaSub?.cancel();
+    busy = false;                 // tranh ket co busy khi rot giua chung
+    _callShowing = false;         // reset de cuoc goi sau con hien duoc
+    _mediaSub?.cancel(); _mediaSub = null;
+    _statSub?.cancel();  _statSub = null;
+    _connSub?.cancel();  _connSub = null;   // huy listener cu -> khong chong cheo
     _weatherTimer?.cancel();
     _nav = _time = _stat = _wp = _route = _notify = _music = _media = _color = _imgsel = _weather = _call = _contact = null;
     status = autoReconnect ? 'Mất kết nối - đang kết nối lại...' : 'Mất kết nối';

@@ -125,7 +125,7 @@ class RouteCB : public NimBLECharacteristicCallbacks {
 class NotifyCB : public NimBLECharacteristicCallbacks {
     void onWrite(NimBLECharacteristic *c) override {
         std::string v = c->getValue();
-        StaticJsonDocument<320> doc;
+        StaticJsonDocument<512> doc;   // du cho thong bao tieng Viet dai (UTF-8 nhieu byte)
         if (deserializeJson(doc, v.c_str()) != DeserializationError::Ok) return;
         strlcpy(g_notify.app,   doc["app"]   | "", sizeof(g_notify.app));
         strlcpy(g_notify.title, doc["title"] | "", sizeof(g_notify.title));

@@ -262,7 +262,8 @@ class WatchService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(NOTI_ID, buildNotification())
+        // Bao ve: Android 14 co the nem exception neu chua du dieu kien -> khong lam crash app
+        try { startForeground(NOTI_ID, buildNotification()) } catch (_: Exception) {}
         return START_STICKY   // he thong giet -> tu bat lai
     }
 
