@@ -11,10 +11,12 @@ class SmartwatchService {
 
   static const _ch = MethodChannel('vhi/media');
 
-  // Tu khoa nhan dien app nghe nhac (theo package name)
+  // Tu khoa nhan dien app nghe nhac (theo package name).
+  // LUU Y: KHONG dung 'zing' (trung com.zing.ZALO!) va 'youtube' (trung youtube video).
   static const _musicApps = {
-    'spotify', 'youtube.music', 'youtube', 'zing', 'nhaccuatui',
-    'soundcloud', 'tidal', 'apple.android.music', 'deezer', 'music',
+    'spotify', 'youtube.music', 'zing.mp3', 'zingmp3', 'nhaccuatui',
+    'soundcloud', 'tidal', 'apple.android.music', 'deezer',
+    'com.sec.android.app.music', 'samsung.android.app.music',
   };
 
   void start() {} // thong bao gio den qua BleService (native), khong con dung plugin
