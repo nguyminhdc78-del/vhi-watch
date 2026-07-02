@@ -79,8 +79,11 @@ extern volatile bool g_colorChanged;
 extern volatile bool g_colorSave;      // can ghi mau xuong flash (lam o main loop, KHONG trong callback BLE)
 
 // --- Tuy chinh giao dien gio (mat "So lon") ---
-extern uint8_t       g_wfPos;          // vi tri: 0=tren, 1=giua, 2=duoi
+extern uint8_t       g_wfPos;          // vi tri cum gio+ngay: 0=tren, 1=giua, 2=duoi
 extern uint8_t       g_wfSize;         // co chu gio: 3..6
+extern uint8_t       g_dateSize;       // co chu ngay: 1..3
+extern uint8_t       g_dateShow;       // 1=hien ngay, 0=an
+extern uint8_t       g_dateR, g_dateG, g_dateB;  // mau chu ngay
 extern volatile bool g_wfCfgChanged;   // vua doi cau hinh -> ve lai + luu flash o main loop
 
 // --- Thoi tiet (app lay online gui xuong) ---

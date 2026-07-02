@@ -222,6 +222,47 @@ class _WatchfaceCard extends StatelessWidget {
                     onSelected: (_) => ble.setWfLayout(size: s[0] as int),
                   ),
               ]),
+              const Divider(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Hiện ngày', style: TextStyle(fontWeight: FontWeight.w500)),
+                  Switch(
+                    value: ble.dateShow,
+                    onChanged: (v) => ble.setWfLayout(dShow: v),
+                  ),
+                ],
+              ),
+              if (ble.dateShow) ...[
+                const SizedBox(height: 6),
+                const Text('Cỡ ngày', style: TextStyle(color: Colors.grey)),
+                const SizedBox(height: 6),
+                Wrap(spacing: 8, children: [
+                  for (final s in const [[1, 'Nhỏ'], [2, 'Vừa'], [3, 'To']])
+                    ChoiceChip(
+                      label: Text(s[1] as String),
+                      selected: ble.dateSize == s[0],
+                      onSelected: (_) => ble.setWfLayout(dSize: s[0] as int),
+                    ),
+                ]),
+                const SizedBox(height: 12),
+                const Text('Màu ngày', style: TextStyle(color: Colors.grey)),
+                const SizedBox(height: 6),
+                Wrap(spacing: 12, runSpacing: 12, children: [
+                  for (final c in HomeScreen._palette)
+                    GestureDetector(
+                      onTap: () => ble.setWfLayout(dColor: c),
+                      child: Container(
+                        width: 34, height: 34,
+                        decoration: BoxDecoration(
+                          color: Color.fromARGB(255, c[0], c[1], c[2]),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white24, width: 2),
+                        ),
+                      ),
+                    ),
+                ]),
+              ],
             ],
           ),
         ),

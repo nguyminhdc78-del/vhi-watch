@@ -138,15 +138,21 @@ static void draw_wf_status() {
     }
 }
 
-// --- Mat 0: so gio LON, vi tri + co chinh duoc tu app ---
+static uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b) {
+    return ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
+}
+
+// --- Mat 0: so gio LON, vi tri + co + mau + an/hien ngay chinh duoc tu app ---
 static void wf_face_big() {
-    int sz = g_wfSize; if (sz < 3) sz = 3; if (sz > 6) sz = 6;
-    int timeH = sz * 8;           // chieu cao chu gio (font 8px * size)
-    int blockH = timeH + 6 + 16;  // gio + khoang cach + ngay (size 2 = 16px)
+    int sz = g_wfSize;  if (sz < 3) sz = 3; if (sz > 6) sz = 6;
+    int dsz = g_dateSize; if (dsz < 1) dsz = 1; if (dsz > 3) dsz = 3;
+    int timeH = sz * 8;                 // chieu cao chu gio
+    int dateH = g_dateShow ? dsz * 8 : 0;
+    int blockH = timeH + (g_dateShow ? 6 + dateH : 0);
     int top;
-    if (g_wfPos == 0)      top = 46;                 // TREN (duoi thanh trang thai)
-    else if (g_wfPos == 2) top = 232 - blockH;       // DUOI
-    else                   top = (240 - blockH) / 2 + 8;  // GIUA
+    if (g_wfPos == 0)      top = 46;                     // TREN (duoi thanh trang thai)
+    else if (g_wfPos == 2) top = 234 - blockH;           // DUOI
+    else                   top = (240 - blockH) / 2 + 8; // GIUA
     if (top < 44) top = 44;
 
     wf_clear_band(top - 2, blockH + 4);
@@ -157,7 +163,8 @@ static void wf_face_big() {
         snprintf(db, sizeof(db), "%s %02d/%02d", WF_WD[tm.tm_wday], tm.tm_mday, tm.tm_mon + 1);
     }
     display_text_center(120, top, tb, ui_color565(), sz);
-    display_text_center(120, top + timeH + 4, db, 0xAD55, 2);
+    if (g_dateShow)
+        display_text_center(120, top + timeH + 6, db, rgb565(g_dateR, g_dateG, g_dateB), dsz);
 }
 
 // --- Mat 1: LICH - ngay to o giua, gio nho o tren ---
@@ -1004,11 +1011,18 @@ void ui_init(lv_group_t *group) {
     // Nap giao dien gio da luu (vi tri + co)
     File wf = LittleFS.open("/wfcfg.dat", "r");
     if (wf) {
-        if (wf.size() >= 2) {
+        int n = wf.size();
+        if (n >= 2) {
             int p = wf.read(), s = wf.read();
             if (p >= 0 && p <= 2) g_wfPos = p;
             if (s >= 3 && s <= 6) g_wfSize = s;
         }
+        if (n >= 4) {
+            int ds = wf.read(), sh = wf.read();
+            if (ds >= 1 && ds <= 3) g_dateSize = ds;
+            g_dateShow = sh ? 1 : 0;
+        }
+        if (n >= 7) { g_dateR = wf.read(); g_dateG = wf.read(); g_dateB = wf.read(); }
         wf.close();
     }
     show_screen(SCR_WATCH);
@@ -1055,7 +1069,10 @@ void ui_tick() {
     if (g_wfCfgChanged) {
         g_wfCfgChanged = false;
         File f = LittleFS.open("/wfcfg.dat", "w");
-        if (f) { uint8_t d[2] = {g_wfPos, g_wfSize}; f.write(d, 2); f.close(); }
+        if (f) {
+            uint8_t d[7] = {g_wfPos, g_wfSize, g_dateSize, g_dateShow, g_dateR, g_dateG, g_dateB};
+            f.write(d, 7); f.close();
+        }
         if (g_cur == SCR_WATCH) { wfLastMin = -2; draw_wf_full(); }
     }
 

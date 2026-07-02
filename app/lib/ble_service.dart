@@ -79,9 +79,12 @@ class BleService extends ChangeNotifier {
   BluetoothDevice? _device;
   BluetoothCharacteristic? _nav, _time, _stat, _wp, _route, _notify, _music, _media, _color, _imgsel, _weather, _call, _contact, _wfcfg;
 
-  // Giao dien gio: vi tri (0=tren,1=giua,2=duoi) + co (3..6)
+  // Giao dien gio: vi tri (0=tren,1=giua,2=duoi) + co gio (3..6) + ngay (co/mau/an-hien)
   int wfPos = 1;
   int wfSize = 4;
+  int dateSize = 2;        // 1..3
+  bool dateShow = true;
+  int dateR = 170, dateG = 170, dateB = 170;
 
   // Danh ba nhanh (goi tu dong ho). Moi item: {'name':.., 'number':..}
   List<Map<String, String>> favorites = [];
@@ -345,27 +348,45 @@ class BleService extends ChangeNotifier {
     } catch (_) {}
   }
 
-  // --- Giao dien gio (vi tri + co) ---
+  // --- Giao dien gio (vi tri + co gio + co/mau/an-hien ngay) ---
   Future<void> loadWfCfg() async {
     try {
       final sp = await SharedPreferences.getInstance();
       wfPos = sp.getInt('wfPos') ?? 1;
       wfSize = sp.getInt('wfSize') ?? 4;
+      dateSize = sp.getInt('dateSize') ?? 2;
+      dateShow = sp.getBool('dateShow') ?? true;
+      dateR = sp.getInt('dateR') ?? 170;
+      dateG = sp.getInt('dateG') ?? 170;
+      dateB = sp.getInt('dateB') ?? 170;
       notifyListeners();
     } catch (_) {}
   }
   Future<void> sendWfCfg() async {
     if (_wfcfg == null) return;
-    try { await _wfcfg!.write([wfPos & 0xff, wfSize & 0xff], withoutResponse: true); } catch (_) {}
+    try {
+      await _wfcfg!.write([
+        wfPos & 0xff, wfSize & 0xff, dateSize & 0xff, dateShow ? 1 : 0,
+        dateR & 0xff, dateG & 0xff, dateB & 0xff,
+      ], withoutResponse: true);
+    } catch (_) {}
   }
-  Future<void> setWfLayout({int? pos, int? size}) async {
+  Future<void> setWfLayout({int? pos, int? size, int? dSize, bool? dShow, List<int>? dColor}) async {
     if (pos != null) wfPos = pos;
     if (size != null) wfSize = size;
+    if (dSize != null) dateSize = dSize;
+    if (dShow != null) dateShow = dShow;
+    if (dColor != null && dColor.length >= 3) { dateR = dColor[0]; dateG = dColor[1]; dateB = dColor[2]; }
     notifyListeners();
     try {
       final sp = await SharedPreferences.getInstance();
       await sp.setInt('wfPos', wfPos);
       await sp.setInt('wfSize', wfSize);
+      await sp.setInt('dateSize', dateSize);
+      await sp.setBool('dateShow', dateShow);
+      await sp.setInt('dateR', dateR);
+      await sp.setInt('dateG', dateG);
+      await sp.setInt('dateB', dateB);
     } catch (_) {}
     await sendWfCfg();
   }

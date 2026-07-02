@@ -216,16 +216,22 @@ class ContactsCB : public NimBLECharacteristicCallbacks {
     }
 };
 
-// Giao dien gio: 2 byte [pos(0-2), size(3-6)]
+// Giao dien gio: [pos, timeSize, dateSize, dateShow, dateR, dateG, dateB]
 class WfCfgCB : public NimBLECharacteristicCallbacks {
     void onWrite(NimBLECharacteristic *c) override {
         std::string v = c->getValue();
         if (v.size() >= 2) {
-            uint8_t p = (uint8_t)v[0], s = (uint8_t)v[1];
-            if (p <= 2) g_wfPos = p;
-            if (s >= 3 && s <= 6) g_wfSize = s;
-            g_wfCfgChanged = true;
+            if ((uint8_t)v[0] <= 2) g_wfPos = (uint8_t)v[0];
+            if ((uint8_t)v[1] >= 3 && (uint8_t)v[1] <= 6) g_wfSize = (uint8_t)v[1];
         }
+        if (v.size() >= 4) {
+            if ((uint8_t)v[2] >= 1 && (uint8_t)v[2] <= 3) g_dateSize = (uint8_t)v[2];
+            g_dateShow = (uint8_t)v[3] ? 1 : 0;
+        }
+        if (v.size() >= 7) {
+            g_dateR = (uint8_t)v[4]; g_dateG = (uint8_t)v[5]; g_dateB = (uint8_t)v[6];
+        }
+        g_wfCfgChanged = true;
     }
 };
 

@@ -18,6 +18,9 @@ volatile bool g_colorChanged = false;
 volatile bool g_colorSave = false;
 uint8_t       g_wfPos = 1;    // giua
 uint8_t       g_wfSize = 4;   // vua
+uint8_t       g_dateSize = 2;
+uint8_t       g_dateShow = 1;
+uint8_t       g_dateR = 170, g_dateG = 170, g_dateB = 170;  // xam
 volatile bool g_wfCfgChanged = false;
 WeatherState g_weather;
 CallState g_call;
