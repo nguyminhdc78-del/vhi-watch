@@ -1043,9 +1043,9 @@ static void build_reply(lv_obj_t *scr) {
 // ============================================================
 //  VECTOR - thu cung mat cyan + mieng (LVGL canvas -> muot, ve hinh cong)
 // ============================================================
-#define PET_CW 200
-#define PET_CH 150
-static lv_color_t petCanvasBuf[PET_CW * PET_CH];   // bo dem an (~60KB) - ve xong day nguyen khung, khong nhay
+#define PET_CW 216
+#define PET_CH 200
+static lv_color_t petCanvasBuf[PET_CW * PET_CH];   // bo dem an - ve xong day nguyen khung, khong nhay
 static lv_obj_t *petCanvas = nullptr, *petZ = nullptr;
 
 static void pet_eye_rect(int cx, int cy, int w, int h, int r, lv_color_t col) {
@@ -1072,34 +1072,34 @@ static void pet_apply(int mood) {  // 0=neutral 1=blink 2=happy 3=sleepy 4=excit
     lv_canvas_fill_bg(petCanvas, lv_color_black(), LV_OPA_COVER);
     lv_color_t col = lv_color_hex(0x2FE6FF);           // cyan Vector
     int cx = PET_CW / 2 + petLookX, cy = PET_CH / 2 + petLookY;
-    int exL = cx - 36, exR = cx + 36, ey = cy - 20, my = cy + 42;
+    int exL = cx - 48, exR = cx + 48, ey = cy - 18, my = cy + 58;   // mat TO, cach xa, lap man
 
     switch (mood) {
         case 1:  // BLINK
-            pet_eye_rect(exL, ey, 44, 10, 5, col); pet_eye_rect(exR, ey, 44, 10, 5, col);
-            pet_arc(cx, my, 22, 30, 150, 7, col); break;
+            pet_eye_rect(exL, ey, 62, 16, 8, col); pet_eye_rect(exR, ey, 62, 16, 8, col);
+            pet_arc(cx, my, 30, 30, 150, 10, col); break;
         case 2:  // HAPPY: mat vom ^ ^ + cuoi
-            pet_arc(exL, ey + 12, 25, 200, 340, 9, col); pet_arc(exR, ey + 12, 25, 200, 340, 9, col);
-            pet_arc(cx, my, 26, 22, 158, 9, col); break;
+            pet_arc(exL, ey + 20, 34, 200, 340, 13, col); pet_arc(exR, ey + 20, 34, 200, 340, 13, col);
+            pet_arc(cx, my, 36, 22, 158, 13, col); break;
         case 3:  // SLEEPY
-            pet_eye_rect(exL, ey + 14, 44, 8, 4, col); pet_eye_rect(exR, ey + 14, 44, 8, 4, col);
-            pet_arc(cx, my, 16, 40, 140, 5, col); break;
+            pet_eye_rect(exL, ey + 22, 62, 12, 6, col); pet_eye_rect(exR, ey + 22, 62, 12, 6, col);
+            pet_arc(cx, my, 22, 40, 140, 7, col); break;
         case 4:  // EXCITED: mat to + mieng mo
-            pet_eye(exL, ey, 48, 66, 24, col); pet_eye(exR, ey, 48, 66, 24, col);
-            pet_eye_rect(cx, my + 6, 36, 30, 15, col); break;
+            pet_eye(exL, ey, 66, 92, 30, col); pet_eye(exR, ey, 66, 92, 30, col);
+            pet_eye_rect(cx, my + 8, 50, 42, 21, col); break;
         case 5:  // CONTENT: nheo + cuoi to
-            pet_eye_rect(exL, ey + 6, 44, 20, 10, col); pet_eye_rect(exR, ey + 6, 44, 20, 10, col);
-            pet_arc(cx, my, 28, 18, 162, 9, col); break;
+            pet_eye_rect(exL, ey + 10, 62, 28, 14, col); pet_eye_rect(exR, ey + 10, 62, 28, 14, col);
+            pet_arc(cx, my, 40, 18, 162, 13, col); break;
         case 6:  // SURPRISED: mat tron to + mieng o
-            pet_eye(exL, ey, 52, 58, 26, col); pet_eye(exR, ey, 52, 58, 26, col);
-            pet_eye_rect(cx, my + 2, 22, 24, 12, col); break;
+            pet_eye(exL, ey, 74, 84, 37, col); pet_eye(exR, ey, 74, 84, 37, col);
+            pet_eye_rect(cx, my + 2, 32, 34, 17, col); break;
         case 7:  // WINK: 1 mat nham ^, 1 mat mo
-            pet_arc(exL, ey + 12, 25, 200, 340, 9, col);
-            pet_eye(exR, ey, 46, 62, 23, col);
-            pet_arc(cx, my, 24, 24, 156, 8, col); break;
-        default: // NEUTRAL: mat tron + cuoi
-            pet_eye(exL, ey, 46, 62, 23, col); pet_eye(exR, ey, 46, 62, 23, col);
-            pet_arc(cx, my, 22, 30, 150, 7, col); break;
+            pet_arc(exL, ey + 20, 34, 200, 340, 13, col);
+            pet_eye(exR, ey, 64, 88, 29, col);
+            pet_arc(cx, my, 34, 22, 158, 12, col); break;
+        default: // NEUTRAL: mat tron to + cuoi
+            pet_eye(exL, ey, 64, 88, 29, col); pet_eye(exR, ey, 64, 88, 29, col);
+            pet_arc(cx, my, 30, 30, 150, 10, col); break;
     }
     if (petZ) {
         if (mood == 3) lv_obj_clear_flag(petZ, LV_OBJ_FLAG_HIDDEN);
