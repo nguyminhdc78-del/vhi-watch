@@ -71,7 +71,8 @@ void hid_start() {
 }
 
 void hid_stop() {
-    NimBLEDevice::deinit(true);
+    NimBLEDevice::deinit(true);   // giai phong server + services (kbd/cc do server so huu)
+    delete hid;                   // wrapper NimBLEHIDDevice tao bang "new" -> phai tu delete (dtor rong, khong double-free)
     hid = nullptr;
     kbdInput = nullptr;
     ccInput = nullptr;

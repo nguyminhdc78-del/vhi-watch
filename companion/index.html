@@ -77,6 +77,8 @@
     <div class="card">
       <h3>Kết nối đồng hồ</h3>
       <p class="hint">Bật đồng hồ rồi nhấn nút bên dưới. App sẽ tự tìm thiết bị <b>VHI-Watch</b>.</p>
+      <p class="hint" style="color:var(--mut)">ℹ️ Đây là bản web cơ bản (kết nối, đồng bộ giờ, chỉ đường). Đầy đủ tính năng
+        (thông báo, nhạc, cuộc gọi, danh bạ, thời tiết, ảnh nền…) có trong <b>app Android</b>.</p>
       <button id="btnConn">🔗 Kết nối ngay</button>
       <button class="danger" id="btnDisc" style="display:none">Ngắt kết nối</button>
     </div>
@@ -102,6 +104,8 @@
     <div class="card">
       <h3>Dẫn đường tự động</h3>
       <p class="hint">Dùng GPS điện thoại + Google Directions để đẩy từng bước rẽ xuống đồng hồ.</p>
+      <p class="hint" style="color:var(--warn)">⚠️ Nhiều trình duyệt chặn gọi thẳng Google Directions (CORS) nên nút "Bắt đầu dẫn đường"
+        có thể báo lỗi. Nếu lỗi, dùng phần "Gửi lệnh rẽ thủ công" bên dưới để thử, hoặc dùng app Android.</p>
       <label>Google Maps API Key</label>
       <input id="apiKey" placeholder="AIza...">
       <label>Điểm đến</label>
@@ -140,6 +144,11 @@
   <section class="tab" id="tab-wall">
     <div class="card">
       <h3>Đổi ảnh nền đồng hồ</h3>
+      <div class="banner" style="display:block;border-color:var(--warn)">
+        ⚠️ Cách WiFi bên dưới chỉ dùng cho <b>firmware đời cũ</b>. Bản firmware hiện tại nhận ảnh nền
+        <b>qua Bluetooth bằng app Android</b> (tab Ảnh nền trong app). Nếu bấm nút dưới mà không vào được,
+        nghĩa là đồng hồ không còn bật WiFi — hãy dùng app Android.
+      </div>
       <p class="hint">Ảnh nền truyền qua WiFi của đồng hồ (không qua Bluetooth). Làm theo 3 bước:</p>
       <div class="step"><span class="n">1</span><span>Trên <b>đồng hồ</b>: Menu → <b>Đổi ảnh nền</b> (đồng hồ bật WiFi).</span></div>
       <div class="step"><span class="n">2</span><span>Vào WiFi <b>VHI-Watch-Setup</b> (mật khẩu <b>12345678</b>).</span></div>

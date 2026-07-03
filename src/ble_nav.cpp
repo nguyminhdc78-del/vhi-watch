@@ -250,23 +250,41 @@ class ReplyCB : public NimBLECharacteristicCallbacks {
 
 static NimBLECharacteristic *chrMedia = nullptr;
 
+// Cac callback dung 1 lan (static): ble_init() bi goi lai moi lan thoat Remote/Chup hinh.
+// NimBLE KHONG bao gio tu delete callback cua characteristic -> neu dung "new" moi lan
+// se ro ri RAM tich luy -> het heap -> treo. Dung instance static: tao 1 lan, khong ro ri.
+static ServerCB    s_serverCB;
+static NavCB       s_navCB;
+static TimeCB      s_timeCB;
+static WpCB        s_wpCB;
+static RouteCB     s_routeCB;
+static NotifyCB    s_notifyCB;
+static MusicCB     s_musicCB;
+static ColorCB     s_colorCB;
+static ImgSelCB    s_imgSelCB;
+static WeatherCB   s_weatherCB;
+static CallCB      s_callCB;
+static ContactsCB  s_contactsCB;
+static WfCfgCB     s_wfCfgCB;
+static ReplyCB     s_replyCB;
+
 void ble_init() {
     NimBLEDevice::init(BLE_DEVICE_NAME);
     NimBLEDevice::setPower(ESP_PWR_LVL_P9);
 
     NimBLEServer *server = NimBLEDevice::createServer();
-    server->setCallbacks(new ServerCB());
+    server->setCallbacks(&s_serverCB, false);   // false = KHONG tu delete (day la object static)
 
     NimBLEService *svc = server->createService(BLE_SVC_UUID);
 
     NimBLECharacteristic *chrNav =
         svc->createCharacteristic(BLE_CHR_NAV_UUID, NIMBLE_PROPERTY::WRITE);
-    chrNav->setCallbacks(new NavCB());
+    chrNav->setCallbacks(&s_navCB);
 
     NimBLECharacteristic *chrTime =
         svc->createCharacteristic(BLE_CHR_TIME_UUID,
                                   NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
-    chrTime->setCallbacks(new TimeCB());
+    chrTime->setCallbacks(&s_timeCB);
 
     chrStatus = svc->createCharacteristic(
         BLE_CHR_STATUS_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
@@ -274,22 +292,22 @@ void ble_init() {
     NimBLECharacteristic *chrWp =
         svc->createCharacteristic(BLE_CHR_WP_UUID,
                                   NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
-    chrWp->setCallbacks(new WpCB());
+    chrWp->setCallbacks(&s_wpCB);
 
     NimBLECharacteristic *chrRoute =
         svc->createCharacteristic(BLE_CHR_ROUTE_UUID,
                                   NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
-    chrRoute->setCallbacks(new RouteCB());
+    chrRoute->setCallbacks(&s_routeCB);
 
     NimBLECharacteristic *chrNotify =
         svc->createCharacteristic(BLE_CHR_NOTIFY_UUID,
                                   NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
-    chrNotify->setCallbacks(new NotifyCB());
+    chrNotify->setCallbacks(&s_notifyCB);
 
     NimBLECharacteristic *chrMusic =
         svc->createCharacteristic(BLE_CHR_MUSIC_UUID,
                                   NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
-    chrMusic->setCallbacks(new MusicCB());
+    chrMusic->setCallbacks(&s_musicCB);
 
     chrMedia = svc->createCharacteristic(
         BLE_CHR_MEDIA_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
@@ -297,37 +315,37 @@ void ble_init() {
     NimBLECharacteristic *chrColor =
         svc->createCharacteristic(BLE_CHR_COLOR_UUID,
                                   NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
-    chrColor->setCallbacks(new ColorCB());
+    chrColor->setCallbacks(&s_colorCB);
 
     NimBLECharacteristic *chrImgSel =
         svc->createCharacteristic(BLE_CHR_IMGSEL_UUID,
                                   NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
-    chrImgSel->setCallbacks(new ImgSelCB());
+    chrImgSel->setCallbacks(&s_imgSelCB);
 
     NimBLECharacteristic *chrWeather =
         svc->createCharacteristic(BLE_CHR_WEATHER_UUID,
                                   NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
-    chrWeather->setCallbacks(new WeatherCB());
+    chrWeather->setCallbacks(&s_weatherCB);
 
     NimBLECharacteristic *chrCall =
         svc->createCharacteristic(BLE_CHR_CALL_UUID,
                                   NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
-    chrCall->setCallbacks(new CallCB());
+    chrCall->setCallbacks(&s_callCB);
 
     NimBLECharacteristic *chrContact =
         svc->createCharacteristic(BLE_CHR_CONTACT_UUID,
                                   NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
-    chrContact->setCallbacks(new ContactsCB());
+    chrContact->setCallbacks(&s_contactsCB);
 
     NimBLECharacteristic *chrWfCfg =
         svc->createCharacteristic(BLE_CHR_WFCFG_UUID,
                                   NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
-    chrWfCfg->setCallbacks(new WfCfgCB());
+    chrWfCfg->setCallbacks(&s_wfCfgCB);
 
     NimBLECharacteristic *chrReply =
         svc->createCharacteristic(BLE_CHR_REPLY_UUID,
                                   NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
-    chrReply->setCallbacks(new ReplyCB());
+    chrReply->setCallbacks(&s_replyCB);
 
     svc->start();
 

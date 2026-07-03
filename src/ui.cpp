@@ -77,8 +77,17 @@ static float    peh = 68, pehN = 68;                    // eye height (blink)
 static uint32_t petTWander = 0, petTBlink = 0, petTBlinkOpen = 0;
 static uint32_t petHappyUntil = 0, petLastFrame = 0;
 // Bo "dao dien" tu doi tro: 0 idle 1 happy 2 laugh 3 confused 4 wink 5 angry 6 look
+//                           7 love(trai tim) 8 dizzy(chong mat) 9 read(doc bao) 10 pho(an pho)
 static int      petAct = 0, petWinkEye = 0;
 static uint32_t petActUntil = 0, petTAct = 0;
+// Menu chon animation (nut A) + khoa 1 tro chon tay
+static bool     petMenuOpen = false, petLock = false;
+static int      petMenuSel = 0;
+// Danh sach animation chon duoc (ten co dau + ma tro; -1 = tu dong)
+static const char *PET_ANIM_NAME[] = { "Đọc báo", "Ăn phở", "Cười", "Trái tim",
+                                       "Chóng mặt", "Giận dữ", "Nháy mắt", "Tự động" };
+static const int   PET_ANIM_ACT[]  = { 9, 10, 2, 7, 8, 5, 4, -1 };
+#define PET_ANIM_N 8
 
 // ---------- tien ich ----------
 static lv_obj_t* make_root() {
@@ -780,9 +789,21 @@ static void key_handler(lv_event_t *e) {
             break;
 
         case SCR_PET:
-            if (key == LV_KEY_ENTER)     { petAct = 7; petActUntil = millis() + 2800; } // A: cham -> mat trai tim
-            else if (key == LV_KEY_DOWN) { petAct = 2; petActUntil = millis() + 2600; } // B: cham -> cuoi ha ha
-            else if (key == LV_KEY_ESC)  request_screen(SCR_MENU);        // C: quay lai menu
+            if (petMenuOpen) {                                  // dang mo menu chon animation
+                if (key == LV_KEY_DOWN)       petMenuSel = (petMenuSel + 1) % PET_ANIM_N;   // B: xuong
+                else if (key == LV_KEY_ENTER) {                 // A: chon
+                    int act = PET_ANIM_ACT[petMenuSel];
+                    if (act < 0) { petLock = false; petAct = 0; petTAct = millis() + 600; } // Tu dong
+                    else         { petLock = true;  petAct = act; petActUntil = millis() + 3600000;
+                                   if (act == 6 || act == 5 || act == 1) { pexN = 0; peyN = 0; } }
+                    petMenuOpen = false;
+                }
+                else if (key == LV_KEY_ESC)   petMenuOpen = false;        // C: dong menu
+            } else {
+                if (key == LV_KEY_ENTER)      { petMenuOpen = true; petMenuSel = 0; } // A: mo menu
+                else if (key == LV_KEY_DOWN)  { petAct = 2; petActUntil = millis() + 2600; petLock = false; } // B: cuoi nhanh
+                else if (key == LV_KEY_ESC)   request_screen(SCR_MENU);   // C: quay lai menu
+            }
             break;
 
         case SCR_DIAL:
@@ -1053,7 +1074,10 @@ static void build_reply(lv_obj_t *scr) {
 #define EYE_H  76
 #define EYE_R  22
 #define EYE_SP 26
-static lv_color_t petCanvasBuf[PET_CW * PET_CH];   // bo dem an -> ve nguyen khung, khong nhay
+// Bo dem canvas ~79KB (224x176x2): cap phat DONG khi vao man Pet, giai phong khi thoat.
+// Truoc day de static -> chiem 79KB RAM VINH VIEN ke ca khi khong xem Pet -> de het heap/treo.
+// Nay chi ton khi dang o man Pet; luc o mat dong ho / dung tinh nang khac thi tra lai het.
+static lv_color_t *petCanvasBuf = nullptr;
 static lv_obj_t *petCanvas = nullptr;
 
 static void pet_rrect(int x, int y, int w, int h, int r, lv_color_t c) {
@@ -1069,6 +1093,13 @@ static void pet_tri(int x0, int y0, int x1, int y1, int x2, int y2, lv_color_t c
 }
 static void pet_circle(int cx, int cy, int r, lv_color_t c) {
     pet_rrect(cx - r, cy - r, 2 * r, 2 * r, r, c);
+}
+static void pet_quad(int x0, int y0, int x1, int y1, int x2, int y2, int x3, int y3, lv_color_t c) {
+    lv_point_t p[4] = {{(lv_coord_t)x0,(lv_coord_t)y0},{(lv_coord_t)x1,(lv_coord_t)y1},
+                       {(lv_coord_t)x2,(lv_coord_t)y2},{(lv_coord_t)x3,(lv_coord_t)y3}};
+    lv_draw_rect_dsc_t d; lv_draw_rect_dsc_init(&d);
+    d.bg_color = c; d.bg_opa = LV_OPA_COVER;
+    lv_canvas_draw_polygon(petCanvas, p, 4, &d);
 }
 static void pet_arc(int cx, int cy, int r, int a0, int a1, int w, lv_color_t c) {
     lv_draw_arc_dsc_t d; lv_draw_arc_dsc_init(&d);
@@ -1152,9 +1183,154 @@ static void pet_dizzy(uint32_t now) {
     }
 }
 
+// Doc bao - mat to nhin xuong + cam to bao xanh nhat sach se
+static void pet_read(uint32_t now) {
+    lv_canvas_fill_bg(petCanvas, lv_color_black(), LV_OPA_COVER);
+    lv_color_t cyan  = lv_color_hex(0x33E1FF);
+    lv_color_t paper = lv_color_hex(0xCDEEF7);   // giay xanh rat nhat
+    lv_color_t ink   = lv_color_hex(0x3A93B0);   // chu
+    int cx = PET_CW / 2;
+    int xL = cx - EYE_SP / 2 - EYE_W, xR = cx + EYE_SP / 2;
+
+    // mat to ban nhin xuong (thap, bo tron) - luot doc qua lai
+    int scan = (int)(sinf(now * 0.0035f) * 10);
+    int ey = 20, eh = 34;
+    pet_rrect(xL + scan, ey, EYE_W, eh, 15, cyan);
+    pet_rrect(xR + scan, ey, EYE_W, eh, 15, cyan);
+
+    // to bao: 1 tam giay bo tron sach, gap giua, tieu de + 3 dong moi ben
+    int px = 16, py = 66, pw = PET_CW - 32, pb = 172;
+    pet_rrect(px, py, pw, pb - py, 10, paper);
+    pet_rrect(cx - 2, py + 8, 4, (pb - py) - 16, 2, ink);     // gap giua
+    pet_rrect(px + 14, py + 12, pw - 28, 14, 4, ink);         // tieu de dam
+    for (int i = 0; i < 3; i++) {
+        int ly = py + 40 + i * 18;
+        pet_rrect(px + 14, ly, pw / 2 - 22, 7, 3, ink);       // cot trai
+        pet_rrect(cx + 8,  ly, pw / 2 - 22, 7, 3, ink);       // cot phai
+    }
+}
+
+// Ve tia set vang (2 tam giac tao hinh zic-zac)
+static void pet_bolt(int cx, int cy, lv_color_t c) {
+    pet_tri(cx + 5, cy - 16, cx - 10, cy + 3, cx + 2, cy + 1, c);
+    pet_tri(cx - 5, cy + 16, cx + 10, cy - 3, cx - 2, cy - 1, c);
+}
+
+// An pho - MIENG chum "O" mut 1 cong mi luon song bi hut ngan dan tu to len,
+// khoi bay len, ket thuc bang nham mat ^^ cuoi suong ("ngon!") roi lap lai.
+static void pet_pho(uint32_t now) {
+    lv_canvas_fill_bg(petCanvas, lv_color_black(), LV_OPA_COVER);
+    lv_color_t cyan  = lv_color_hex(0x33E1FF);
+    lv_color_t nood  = lv_color_hex(0xF3E7C0);   // cong mi (vang kem)
+    lv_color_t deep  = lv_color_hex(0x1C88A6);   // than to
+    lv_color_t broth = lv_color_hex(0x2FB6D8);   // nuoc dung / khoi
+    lv_color_t wood  = lv_color_hex(0xC98A4B);   // dua go
+    lv_color_t yel   = lv_color_hex(0xFFD23F);
+    int cx  = PET_CW / 2;
+    int bob = (int)(sinf(now * 0.005f) * 2);     // dau gat gu nhe
+
+    // ---- Chu ky hut: 0..0.72 hut mi, 0.72..1 nham mat cuoi "ngon" ----
+    const uint32_t T = 1600;
+    float p     = (now % T) / (float)T;
+    bool  savor = p > 0.72f;
+    float slurp = savor ? 1.0f : (p / 0.72f);    // 0..1: cong mi bi mut ngan dan
+
+    int my    = 92 + bob;                        // tam mieng
+    int bowlY = 128;                             // mat nuoc trong to
+
+    // ---- Mat: nhin xuong to (hoi nheo giua chung hut) / ^^ khi ngon ----
+    int ey = 32 + bob, exL = cx - 46, exR = cx + 46;
+    if (savor) {
+        pet_arc(exL, ey + 6, 22, 200, 340, 9, cyan);         // ^ mat trai
+        pet_arc(exR, ey + 6, 22, 200, 340, 9, cyan);         // ^ mat phai
+    } else {
+        int eh = 30 - (int)(sinf(slurp * 3.14159f) * 9);     // nheo lai luc hut manh nhat
+        pet_rrect(exL - 17, ey - eh / 2, 34, eh, 13, cyan);
+        pet_rrect(exR - 17, ey - eh / 2, 34, eh, 13, cyan);
+    }
+
+    // ---- Khoi bay len (3 luong troi lien tuc) ----
+    for (int i = 0; i < 3; i++) {
+        int rise = (int)((now / 22 + i * 22) % 46);
+        int sx = cx - 30 + i * 30 + (int)(sinf(now * 0.006f + i * 1.7f) * 5);
+        pet_circle(sx, 120 - rise, 3, broth);
+    }
+
+    // ---- Cong mi luon song bi hut tu to len mieng (ve TRUOC mieng -> chui vao mieng) ----
+    if (!savor) {
+        int top = my + 4;
+        int bot = bowlY - (int)(slurp * (bowlY - top));       // day cong mi dang len dan
+        for (int y = top; y <= bot; y += 5) {
+            float t   = (float)(y - top);
+            float amp = 9.0f * (1.0f - slurp * 0.45f);         // hut cang nhieu, cong cang thang
+            int   x   = cx + (int)(sinf(t * 0.11f + now * 0.022f) * amp);
+            pet_circle(x, y, 4, nood);
+        }
+    }
+
+    // ---- Mieng: "O" chum mut / cuoi tuoi khi ngon ----
+    if (savor) {
+        pet_arc(cx, my - 8, 15, 20, 160, 6, cyan);            // cuoi ∪
+        pet_bolt(cx + 44, my - 26, yel);                      // tia sao "ngon!"
+        pet_bolt(cx - 44, my - 20, yel);
+    } else {
+        int mr = 11 + (int)(sinf(now * 0.03f) * 2);           // chum-nha nhip mut
+        pet_circle(cx, my, mr, cyan);
+        pet_circle(cx, my, mr - 5, lv_color_black());          // long mieng: mi chui vao day
+    }
+
+    // ---- To pho + nuoc dung + dua go ----
+    int rw = 150;
+    pet_rrect(cx - rw / 2 - 4, bowlY - 6, rw + 8, 12, 6, cyan);       // vanh to
+    pet_quad(cx - rw / 2, bowlY, cx + rw / 2, bowlY,
+             cx + rw / 2 - 26, bowlY + 40, cx - rw / 2 + 26, bowlY + 40, deep);
+    pet_rrect(cx - rw / 2 + 8, bowlY - 2, rw - 16, 5, 2, broth);      // mat nuoc sanh
+    pet_rrect(cx + 22, bowlY - 50, 5, 58, 2, wood);                   // dua 1
+    pet_rrect(cx + 32, bowlY - 50, 5, 58, 2, wood);                   // dua 2
+}
+
+// Menu chon animation - ve trang len canvas, dieu khien bang nut A/B/C
+static void pet_menu_draw() {
+    lv_canvas_fill_bg(petCanvas, lv_color_hex(0x0A0F1E), LV_OPA_COVER);
+    lv_draw_label_dsc_t t; lv_draw_label_dsc_init(&t);
+    t.color = lv_color_hex(0x33E1FF); t.font = &vn_font_20;
+    t.align = LV_TEXT_ALIGN_CENTER;
+    lv_canvas_draw_text(petCanvas, 0, 6, PET_CW, &t, "Chọn animation");
+
+    int y0 = 38, rh = 17;
+    for (int i = 0; i < PET_ANIM_N; i++) {
+        int y = y0 + i * rh;
+        lv_draw_label_dsc_t d; lv_draw_label_dsc_init(&d);
+        d.font = &vn_font_16;
+        if (i == petMenuSel) {
+            pet_rrect(14, y - 1, PET_CW - 28, rh, 4, lv_color_hex(0x1E5066));
+            d.color = lv_color_white();
+        } else {
+            d.color = lv_color_hex(0x8FB7C7);
+        }
+        lv_canvas_draw_text(petCanvas, 26, y, PET_CW - 44, &d, PET_ANIM_NAME[i]);
+    }
+}
+
 static void build_pet(lv_obj_t *scr) {
     lv_obj_set_style_bg_color(scr, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
+
+    // Cap phat bo dem canvas ngay khi vao man Pet (giai phong khi thoat o show_screen).
+    if (!petCanvasBuf)
+        petCanvasBuf = (lv_color_t *)malloc((size_t)PET_CW * PET_CH * sizeof(lv_color_t));
+    if (!petCanvasBuf) {                      // het RAM -> bao nhe, khong tao canvas (petCanvas = null)
+        lv_obj_t *l = lv_label_create(scr);
+        lv_obj_set_style_text_font(l, &vn_font_16, 0);
+        lv_obj_set_style_text_color(l, lv_color_hex(0xE5A23B), 0);
+        lv_obj_set_width(l, 200);
+        lv_label_set_long_mode(l, LV_LABEL_LONG_WRAP);
+        lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
+        lv_label_set_text(l, "Khong du RAM cho Pet.\nNhan C de quay lai.");
+        lv_obj_center(l);
+        return;
+    }
+
     petCanvas = lv_canvas_create(scr);
     lv_canvas_set_buffer(petCanvas, petCanvasBuf, PET_CW, PET_CH, LV_IMG_CF_TRUE_COLOR);
     lv_obj_center(petCanvas);
@@ -1162,6 +1338,7 @@ static void build_pet(lv_obj_t *scr) {
     pex = pexN = pey = peyN = 0; peh = pehN = EYE_H;
     petTWander = petTBlink = petTBlinkOpen = petHappyUntil = petLastFrame = 0;
     petAct = 0; petActUntil = 0; petTAct = 0;
+    petMenuOpen = false; petLock = false; petMenuSel = 0;
     pet_render(0, EYE_H, EYE_H, 0, 0, lv_color_hex(0x33E1FF));
 }
 
@@ -1172,27 +1349,34 @@ void ui_fast_tick() {
     if (now - petLastFrame < 40) return;    // ~25fps cho easing muot
     petLastFrame = now;
 
-    if (g_notify.hasNew) { g_notify.hasNew = false; petAct = 7; petActUntil = now + 2800; }  // tin nhan -> mat trai tim
+    // ---- Dang mo menu chon animation -> chi ve menu ----
+    if (petMenuOpen) { pet_menu_draw(); return; }
 
-    // ---- Dao dien: khi dang idle, thinh thoang random 1 tro cho vui ----
-    if (petAct == 0 && now >= petTAct) {
-        int r = (int)random(0, 100);
-        if      (r < 24) { petAct = 1; petActUntil = now + 2200; }                 // cuoi mim
-        else if (r < 40) { petAct = 2; petActUntil = now + 2400; }                 // cuoi ha ha (nhun)
-        else if (r < 55) { petAct = 3; petActUntil = now + 1500; }                 // boi roi (lac)
-        else if (r < 67) { petAct = 4; petActUntil = now + 260; petWinkEye = (int)random(0,2); } // nhay 1 mat
-        else if (r < 77) { petAct = 5; petActUntil = now + 1800; }                 // gian du
-        else if (r < 86) { petAct = 7; petActUntil = now + 2600; }                 // mat trai tim (love)
-        else if (r < 93) { petAct = 8; petActUntil = now + 2000; }                 // chong mat (dizzy)
-        else             { petAct = 6; petActUntil = now + 1800;                   // nhin cham 1 ben (to mo)
-                           pexN = (random(0,2) ? 40 : -40); peyN = 0; }
-        petTAct = now + 2600 + (uint32_t)random(0, 3200);   // lan quyet dinh ke tiep
+    if (g_notify.hasNew && !petLock) { g_notify.hasNew = false; petAct = 7; petActUntil = now + 2800; }  // tin nhan -> mat trai tim
+
+    // ---- Dao dien tu dong (chi khi KHONG khoa tro chon tay) ----
+    if (!petLock) {
+        if (petAct == 0 && now >= petTAct) {
+            int r = (int)random(0, 100);
+            if      (r < 24) { petAct = 1; petActUntil = now + 2200; }                 // cuoi mim
+            else if (r < 40) { petAct = 2; petActUntil = now + 2400; }                 // cuoi ha ha (nhun)
+            else if (r < 55) { petAct = 3; petActUntil = now + 1500; }                 // boi roi (lac)
+            else if (r < 67) { petAct = 4; petActUntil = now + 260; petWinkEye = (int)random(0,2); } // nhay 1 mat
+            else if (r < 77) { petAct = 5; petActUntil = now + 1800; }                 // gian du
+            else if (r < 86) { petAct = 7; petActUntil = now + 2600; }                 // mat trai tim (love)
+            else if (r < 93) { petAct = 8; petActUntil = now + 2000; }                 // chong mat (dizzy)
+            else             { petAct = 6; petActUntil = now + 1800;                   // nhin cham 1 ben (to mo)
+                               pexN = (random(0,2) ? 40 : -40); peyN = 0; }
+            petTAct = now + 2600 + (uint32_t)random(0, 3200);   // lan quyet dinh ke tiep
+        }
+        if (petAct != 0 && now >= petActUntil) { petAct = 0; }   // het tro -> ve idle
     }
-    if (petAct != 0 && now >= petActUntil) { petAct = 0; }   // het tro -> ve idle
 
-    // ---- Love / dizzy ve rieng, thoat som ----
-    if (petAct == 7) { pet_love(now);  return; }
-    if (petAct == 8) { pet_dizzy(now); return; }
+    // ---- Cac tro ve rieng, thoat som ----
+    if (petAct == 7)  { pet_love(now);  return; }   // trai tim
+    if (petAct == 8)  { pet_dizzy(now); return; }   // chong mat
+    if (petAct == 9)  { pet_read(now);  return; }   // doc bao
+    if (petAct == 10) { pet_pho(now);   return; }   // an pho
 
     // ---- Wander + chop mat chi khi idle (tro khac tu lo phan cua no) ----
     if (petAct == 0 || petAct == 1 || petAct == 5) {
@@ -1246,6 +1430,7 @@ void ui_fast_tick() {
 static void show_screen(Screen s) {
     // doc don dep man hinh cu
     lv_obj_t *old = g_scr;
+    bool leavingPet = (g_cur == SCR_PET);   // roi man Pet -> tra lai ~79KB bo dem canvas
     if (g_cur == SCR_WATCH || g_cur == SCR_QR) display_set_raw(false);  // het man ve-raw
     if (g_cur == SCR_REMOTE || g_cur == SCR_CAMERA) { hid_stop(); ble_init(); } // tat HID, bat lai BLE thuong
 
@@ -1297,6 +1482,9 @@ static void show_screen(Screen s) {
     lv_group_focus_obj(focus);
 
     if (old) lv_obj_del(old);
+
+    // Da xoa xong canvas cu -> gio moi giai phong bo dem Pet (79KB) cho tinh nang khac dung
+    if (leavingPet && petCanvasBuf) { free(petCanvasBuf); petCanvasBuf = nullptr; }
 
     if (s == SCR_NAV)    update_nav();
     if (s == SCR_NOTIFY) update_notify();
