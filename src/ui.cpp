@@ -12,6 +12,7 @@
 #include <LittleFS.h>
 #include "bao_img.h"
 #include "eat_img.h"
+#include "heart_img.h"
 
 // Font tieng Viet (co dau) - dung cho thong bao / nhac / ten nguoi goi
 LV_FONT_DECLARE(vn_font_16);
@@ -85,8 +86,6 @@ static uint32_t petActUntil = 0, petTAct = 0;
 // Menu chon animation (nut A) + khoa 1 tro chon tay
 static bool     petMenuOpen = false, petLock = false;
 static int      petMenuSel = 0;
-// An pho: nho frame + vi tri da ve lan truoc -> chi ve lai khi doi (tranh blit+flush moi tick)
-static int      petPhoLastF = -1, petPhoLastY = 0;
 // Danh sach animation chon duoc (ten co dau + ma tro; -1 = tu dong)
 static const char *PET_ANIM_NAME[] = { "Đọc báo", "Ăn phở", "Cười", "Trái tim",
                                        "Chóng mặt", "Giận dữ", "Nháy mắt", "Tự động" };
@@ -801,7 +800,6 @@ static void key_handler(lv_event_t *e) {
                     else         { petLock = true;  petAct = act; petActUntil = millis() + 3600000;
                                    if (act == 6 || act == 5 || act == 1) { pexN = 0; peyN = 0; } }
                     petMenuOpen = false;
-                    petPhoLastF = -1;                  // vao tro moi -> ep ve lai frame dau (khoi ket menu cu)
                 }
                 else if (key == LV_KEY_ESC)   petMenuOpen = false;        // C: dong menu
             } else {
@@ -1111,13 +1109,6 @@ static void pet_arc(int cx, int cy, int r, int a0, int a1, int w, lv_color_t c) 
     d.color = c; d.width = w; d.rounded = 1;
     lv_canvas_draw_arc(petCanvas, cx, cy, r, a0, a1, &d);
 }
-// Trai tim = 2 hinh tron + 1 tam giac chuc xuong
-static void pet_heart(int cx, int cy, int R, lv_color_t c) {
-    pet_circle(cx - R, cy, R, c);
-    pet_circle(cx + R, cy, R, c);
-    pet_tri(cx - 2 * R, cy, cx + 2 * R, cy, cx, cy + 2 * R + R / 3, c);
-}
-
 // mood: 0 none  1 happy(cuoi)  2 tired(ngu)  3 angry(gian)
 // hlL/hlR: chieu cao rieng mat trai/phai (de nheo mat, curious phong to)
 static void pet_render(int mood, int hlL, int hlR, int dx, int dy, lv_color_t col) {
@@ -1146,14 +1137,25 @@ static void pet_render(int mood, int hlL, int hlR, int dx, int dy, lv_color_t co
     }
 }
 
-// Mat trai tim mau do (love) - co nhip dap phong to thu nho
+// Mat trai tim: dung anh heart-eyes (assets/heart.png). Sinh dong bang nhip dap (zoom
+// phong to/thu nho kieu lub-dub) + nhun nhe -> bieu cam "yeu" song dong tu 1 khung hinh.
 static void pet_love(uint32_t now) {
     lv_canvas_fill_bg(petCanvas, lv_color_black(), LV_OPA_COVER);
-    lv_color_t red = lv_color_hex(0xFF2E55);
-    int R = 22 + (int)(sinf(now * 0.012f) * 4);   // nhip dap
-    int cy = PET_CH / 2 - 6;
-    pet_heart(PET_CW / 2 - EYE_SP / 2 - EYE_W / 2, cy, R, red);
-    pet_heart(PET_CW / 2 + EYE_SP / 2 + EYE_W / 2, cy, R, red);
+
+    // Nhip dap: 2 tan so gan nhau tao cam giac "lub-dub", dao quanh 100%
+    float b = sinf(now * 0.010f) * 0.7f + sinf(now * 0.020f) * 0.3f;   // -1..1
+    int zoom = 256 + (int)(b * 14);                 // ~95%..105% (256 = 100%), khong tran canvas
+    int bob  = (int)(sinf(now * 0.006f) * 3);       // nhun nhe +-3px
+
+    lv_draw_img_dsc_t idsc; lv_draw_img_dsc_init(&idsc);
+    idsc.zoom     = zoom;
+    idsc.pivot.x  = heart_img.header.w / 2;         // phong to quanh tam anh -> giu chinh giua
+    idsc.pivot.y  = heart_img.header.h / 2;
+    idsc.antialias = 0;
+
+    int x = (PET_CW - heart_img.header.w) / 2;       // canh giua ngang
+    int y = (PET_CH - heart_img.header.h) / 2 + bob; // canh giua doc + nhun
+    lv_canvas_draw_img(petCanvas, x, y, &heart_img, &idsc);
 }
 
 // Ve 1 mat xoay tron oc (@_@) - nhieu vong ban kinh tang dan, xoay theo time
@@ -1261,11 +1263,8 @@ static void pet_bolt(int cx, int cy, lv_color_t c) {
 
 // An pho: flipbook 7 frame ANH THAT (eat_imgs tu assets/eat1..7). Chieu 1->7, giu lau
 // frame cuoi (tim tim, no ne), co nhun nhe cho sinh dong, roi lap.
-// TOI UU: moi frame la anh RGB565+ALPHA ~200x208 -> blit (alpha-blend tung diem) + flush
-// ca canvas rat nang tren C3. Truoc day ve LAI moi tick 40ms (25fps) du hinh gan nhu khong
-// doi -> giat. Nay chi ve khi THUC SU doi (doi frame hoac doi vi tri nhun y) -> giam ~3x
-// so lan blit/flush, van giu nhun nhe.
 static void pet_pho(uint32_t now) {
+    lv_canvas_fill_bg(petCanvas, lv_color_black(), LV_OPA_COVER);
     static const uint16_t DUR[EAT_FRAMES] = {700, 350, 350, 500, 350, 400, 1700};  // ms/frame
     uint32_t total = 0;
     for (int i = 0; i < EAT_FRAMES; i++) total += DUR[i];
@@ -1274,16 +1273,10 @@ static void pet_pho(uint32_t now) {
     for (int i = 0; i < EAT_FRAMES; i++) { acc += DUR[i]; if (t < acc) { f = i; break; } }
 
     const lv_img_dsc_t *img = eat_imgs[f];
-    int bob = (int)(sinf(now * 0.005f) * 2);            // nhun nhe +-2px
+    int bob = (int)(sinf(now * 0.005f) * 2);            // nhun nhe
+    lv_draw_img_dsc_t idsc; lv_draw_img_dsc_init(&idsc);
     int x = (PET_CW - img->header.w) / 2;
     int y = (PET_CH - img->header.h) / 2 + bob;
-
-    // Hinh y het lan truoc -> bo qua (khong dong canvas -> khong flush SPI -> het giat)
-    if (f == petPhoLastF && y == petPhoLastY) return;
-    petPhoLastF = f; petPhoLastY = y;
-
-    lv_canvas_fill_bg(petCanvas, lv_color_black(), LV_OPA_COVER);
-    lv_draw_img_dsc_t idsc; lv_draw_img_dsc_init(&idsc);
     lv_canvas_draw_img(petCanvas, x, y, img, &idsc);
 }
 
@@ -1337,7 +1330,6 @@ static void build_pet(lv_obj_t *scr) {
     petTWander = petTBlink = petTBlinkOpen = petHappyUntil = petLastFrame = 0;
     petAct = 0; petActUntil = 0; petTAct = 0;
     petMenuOpen = false; petLock = false; petMenuSel = 0;
-    petPhoLastF = -1;                          // canvas moi cap phat -> ep ve lai frame an pho dau tien
     pet_render(0, EYE_H, EYE_H, 0, 0, lv_color_hex(0x33E1FF));
 }
 
