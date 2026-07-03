@@ -82,8 +82,8 @@ void loop() {
         ui_tick();
     }
 
-    // 3b) Hoat hinh nhanh (Vector) khi dang o man Pet
-    ui_fast_tick();
+    // 3b) Hoat hinh nhanh (Vector) khi dang o man Pet (bo qua khi man dang tat)
+    if (!s_screenOff) ui_fast_tick();
 
     // 4) Web server (khi dang upload)
     web_task();

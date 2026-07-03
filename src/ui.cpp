@@ -689,6 +689,7 @@ static void key_handler(lv_event_t *e) {
                 wf_save_style();
                 draw_wf_full();
             }
+            else if (key == LV_KEY_ESC) request_screen(SCR_PET);   // C: ve mat Vector
             break;
 
         case SCR_MENU:
@@ -777,8 +778,9 @@ static void key_handler(lv_event_t *e) {
             break;
 
         case SCR_PET:
-            if (key == LV_KEY_DOWN || key == LV_KEY_ENTER) petHappyUntil = millis() + 1600; // vuot ve -> vui
-            else if (key == LV_KEY_ESC) request_screen(SCR_MENU);
+            if (key == LV_KEY_DOWN)       request_screen(SCR_WATCH);     // A: vao dong ho
+            else if (key == LV_KEY_ENTER) petHappyUntil = millis() + 1600; // B: vuot ve -> vui
+            else if (key == LV_KEY_ESC)   request_screen(SCR_MENU);      // C: menu
             break;
 
         case SCR_DIAL:
@@ -1084,8 +1086,6 @@ void ui_fast_tick() {
     if (now - petLastFrame < 60) return;   // ~16fps
     petLastFrame = now;
 
-    if (g_notify.hasNew) { g_notify.hasNew = false; petExcitedUntil = now + 2500; }  // tin nhan -> reo
-
     if (!petBlinking && now >= petNextBlink) { petBlinking = true; petBlinkStart = now; }
     if (petBlinking && now - petBlinkStart > 130) {
         petBlinking = false;
@@ -1198,7 +1198,7 @@ void ui_init(lv_group_t *group) {
         if (n >= 7) { g_dateR = wf.read(); g_dateG = wf.read(); g_dateB = wf.read(); }
         wf.close();
     }
-    show_screen(SCR_WATCH);
+    show_screen(SCR_PET);   // man chinh = mat Vector
 }
 
 void ui_reload_wallpaper() {
@@ -1209,7 +1209,7 @@ void ui_reload_wallpaper() {
 }
 
 bool ui_can_sleep() {
-    return g_cur == SCR_WATCH;   // chi ngu khi dang o mat dong ho
+    return g_cur == SCR_WATCH || g_cur == SCR_PET;   // ngu o mat dong ho / Vector
 }
 
 void ui_tick() {
@@ -1235,8 +1235,9 @@ void ui_tick() {
         if (g_cur == SCR_REPLY) request_screen(SCR_REPLY);
     }
 
-    // Co thong bao moi -> tu mo man Thong bao (khi dang o man dong ho, khong phai luc co cuoc goi)
-    if (g_notify.hasNew && g_cur == SCR_WATCH && !g_call.ringing) request_screen(SCR_NOTIFY);
+    // Co thong bao moi -> tu mo man Thong bao (tu mat dong ho hoac Vector, khong phai luc co cuoc goi)
+    if (g_notify.hasNew && (g_cur == SCR_WATCH || g_cur == SCR_PET) && !g_call.ringing)
+        request_screen(SCR_NOTIFY);
 
     // Doi mau chu (tu app) -> ve lai gio ngay neu dang o mat dong ho
     if (g_colorChanged) {
