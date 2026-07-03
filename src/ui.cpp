@@ -1120,16 +1120,36 @@ static void pet_love(uint32_t now) {
     pet_heart(PET_CW / 2 + EYE_SP / 2 + EYE_W / 2, cy, R, red);
 }
 
-// Chong mat - 2 vong xoay mau vang (dizzy)
+// Ve 1 mat xoay tron oc (@_@) - nhieu vong ban kinh tang dan, xoay theo time
+static void pet_swirl(int cx, int cy, int a, lv_color_t c) {
+    for (int k = 0; k < 4; k++) {
+        int r = 8 + k * 7;
+        int s = a + k * 250;
+        pet_arc(cx, cy, r, s, s + 230, 5, c);
+    }
+}
+
+// Chong mat - 2 mat xoay tron oc + sao nhieu mau bay vong quanh dau (dizzy)
 static void pet_dizzy(uint32_t now) {
     lv_canvas_fill_bg(petCanvas, lv_color_black(), LV_OPA_COVER);
-    lv_color_t yel = lv_color_hex(0xFFC933);
-    int a = (int)(now * 0.4f) % 360;
-    int cy = PET_CH / 2;
-    int cxL = PET_CW / 2 - EYE_SP / 2 - EYE_W / 2;
-    int cxR = PET_CW / 2 + EYE_SP / 2 + EYE_W / 2;
-    pet_arc(cxL, cy, 30, a, a + 290, 11, yel);
-    pet_arc(cxR, cy, 30, a + 180, a + 470, 11, yel);
+    lv_color_t swc = lv_color_hex(0x9B6BFF);   // xoay mau tim
+    int a  = (int)(now * 0.45f) % 360;
+    int cy = PET_CH / 2 + 8;
+    pet_swirl(PET_CW / 2 - EYE_SP / 2 - EYE_W / 2, cy, a, swc);
+    pet_swirl(PET_CW / 2 + EYE_SP / 2 + EYE_W / 2, cy, a, swc);
+
+    // 3 ngoi sao nhieu mau bay vong tren dau
+    static const uint32_t starCol[3] = { 0xFFD23F, 0xFF4D6A, 0x4DE1FF };
+    float base = now * 0.006f;
+    int ocx = PET_CW / 2, ocy = 30;
+    for (int i = 0; i < 3; i++) {
+        float ang = base + i * 2.094f;          // 120 do cach nhau
+        int sx = ocx + (int)(cosf(ang) * 46);
+        int sy = ocy + (int)(sinf(ang) * 14);   // quy dao det (nhin nghieng)
+        lv_color_t sc = lv_color_hex(starCol[i]);
+        pet_circle(sx, sy, 6, sc);              // than sao
+        pet_arc(sx, sy, 9, 0, 360, 2, sc);      // hao quang
+    }
 }
 
 static void build_pet(lv_obj_t *scr) {
