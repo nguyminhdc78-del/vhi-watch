@@ -108,8 +108,8 @@ static int pet_menu_act(int idx) {                      // -1 = tu dong
 // ============================================================
 #define PET_CW 224
 #define PET_CH 208   // cao gan het man (240) -> animation to hon, lap day man tot hon
-#define EYE_W  72
-#define EYE_H  76
+#define EYE_W  80
+#define EYE_H  84
 #define EYE_R  22
 #define EYE_SP 26
 // Bo dem canvas ~79KB (224x176x2): cap phat DONG khi vao man Pet, giai phong khi thoat.
@@ -567,9 +567,9 @@ void pet_tick(uint32_t now) {
     // ---- Wander + chop mat chi khi idle ----
     if (petAct == 0 || petAct == 1 || petAct == 5) {
         if (now >= petTWander) {
-            pexN = (float)random(-52, 53);        // ngo quanh RONG hon
-            peyN = (float)random(-30, 16);        // hoi thien nhin LEN (bot ve buon)
-            petTWander = now + 600 + (uint32_t)random(0, 1600);   // ngo thuong xuyen hon
+            pexN = (float)random(-48, 49);        // ngo quanh CA RA 2 CANH man (co luc nhin sat mep)
+            peyN = (float)random(-16, 17);        // ngang tam la chinh
+            petTWander = now + 900 + (uint32_t)random(0, 2200);   // ngo tu nhien, khong voi
         }
     }
     if (petAct != 2 && petAct != 4) {
@@ -599,13 +599,12 @@ void pet_tick(uint32_t now) {
                  if (pex > 8)      hlR += 14;
                  else if (pex < -8) hlL += 14;
                  col = lv_color_hex(0xFF9F40); break; }
-        default: {
-                 struct tm tm;                                  // dem khuya -> lim dim, xanh mo
-                 if (pet_localtime(tm) && (tm.tm_hour >= 22 || tm.tm_hour < 6)) {
-                     mood = 2; col = lv_color_hex(0x2A7AA8);
-                 } else {
-                     glint = true;                              // ngay: idle mat to, long lanh, ngo quanh
-                 }
+        default: {                                             // idle: mat to mo + long lanh (ca dem)
+                 glint = true;
+                 // Phoi canh khi ngo sang canh: mat GAN mep to ra, mat XA nho lai (kieu quay dau 3D)
+                 int persp = (int)(pex * 0.36f);               // pex>0 = ngo phai
+                 if (persp > 22) persp = 22; else if (persp < -22) persp = -22;
+                 hlR += persp; hlL -= persp;                   // ngo phai -> mat phai to, mat trai nho (va nguoc lai)
                  break; }
     }
     if (hlL < 4) hlL = 4;  if (hlR < 4) hlR = 4;
@@ -619,8 +618,14 @@ PetKeyResult pet_key(uint32_t key) {
         else if (key == LV_KEY_ENTER) {
             int act = pet_menu_act(petMenuSel);
             if (act < 0) { petLock = false; petAct = 0; petRestUntil = millis() + 600; }   // Tu dong
-            else         { petLock = true;  petAct = act; petActUntil = millis() + 3600000;
-                           if (act == 6 || act == 5 || act == 1) { pexN = 0; peyN = 0; } }
+            else {                                     // Chon tay: dien 1 lat roi TU ve idle (khong khoa cung -> khoi bi ket)
+                petLock = false;
+                const PetTrick *t = pet_trick_of(act);
+                uint32_t d = t ? t->dur : 2000;
+                petAct = act;
+                petActUntil = millis() + (d < 6000 ? 15000 : d + 3000);   // tro ngan: xem ~15s; tro dai: chay tron +3s
+                if (act == 6 || act == 5 || act == 1) { pexN = 0; peyN = 0; }
+            }
             petMenuOpen = false;
         }
         else if (key == LV_KEY_ESC)   petMenuOpen = false;
