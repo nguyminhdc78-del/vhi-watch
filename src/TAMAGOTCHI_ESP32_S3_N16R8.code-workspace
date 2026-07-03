@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"name": "TAMAGOTCHI_ESP32_S3_N16R8",
+			"path": "../../game/TAMAGOTCHI_ESP32_S3_N16R8"
+		},
+		{
+			"name": "esp32c3_smartwatch",
+			"path": ".."
+		}
+	],
+	"settings": {}
+}

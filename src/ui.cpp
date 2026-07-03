@@ -10,6 +10,8 @@
 #include <time.h>
 #include <math.h>
 #include <LittleFS.h>
+#include "bao_img.h"
+#include "eat_img.h"
 
 // Font tieng Viet (co dau) - dung cho thong bao / nhac / ten nguoi goi
 LV_FONT_DECLARE(vn_font_16);
@@ -83,6 +85,8 @@ static uint32_t petActUntil = 0, petTAct = 0;
 // Menu chon animation (nut A) + khoa 1 tro chon tay
 static bool     petMenuOpen = false, petLock = false;
 static int      petMenuSel = 0;
+// An pho: nho frame + vi tri da ve lan truoc -> chi ve lai khi doi (tranh blit+flush moi tick)
+static int      petPhoLastF = -1, petPhoLastY = 0;
 // Danh sach animation chon duoc (ten co dau + ma tro; -1 = tu dong)
 static const char *PET_ANIM_NAME[] = { "Đọc báo", "Ăn phở", "Cười", "Trái tim",
                                        "Chóng mặt", "Giận dữ", "Nháy mắt", "Tự động" };
@@ -797,6 +801,7 @@ static void key_handler(lv_event_t *e) {
                     else         { petLock = true;  petAct = act; petActUntil = millis() + 3600000;
                                    if (act == 6 || act == 5 || act == 1) { pexN = 0; peyN = 0; } }
                     petMenuOpen = false;
+                    petPhoLastF = -1;                  // vao tro moi -> ep ve lai frame dau (khoi ket menu cu)
                 }
                 else if (key == LV_KEY_ESC)   petMenuOpen = false;        // C: dong menu
             } else {
@@ -1069,7 +1074,7 @@ static void build_reply(lv_obj_t *scr) {
 //  Cam xuc: vui = mi mat DUOI cong len; met/ngu = mi mat TREN xech.
 // ============================================================
 #define PET_CW 224
-#define PET_CH 176
+#define PET_CH 208   // cao gan het man (240) -> animation to hon, lap day man tot hon
 #define EYE_W  72
 #define EYE_H  76
 #define EYE_R  22
@@ -1183,30 +1188,68 @@ static void pet_dizzy(uint32_t now) {
     }
 }
 
-// Doc bao - mat to nhin xuong + cam to bao xanh nhat sach se
+// ---- Mat cho man doc bao: rounded rect; khi chop thi thanh 2 vom cong ----
+static void pet_read_eyes(int cx, int cyE, int w, int h, int r, bool blink, lv_color_t col) {
+    int gap = 20;
+    int lx = cx - gap / 2 - w, rx = cx + gap / 2;
+    if (blink) {
+        pet_arc(lx + w / 2, cyE + h / 2, w / 2, 200, 340, 6, col);
+        pet_arc(rx + w / 2, cyE + h / 2, w / 2, 200, 340, 6, col);
+    } else {
+        pet_rrect(lx, cyE, w, h, r, col);
+        pet_rrect(rx, cyE, w, h, r, col);
+    }
+}
+
+// Doc bao (storyboard 10 pha): idle -> mo mat -> bao truot len -> lac vao vi tri
+// -> DOC LAU (~8s, co nhun nhe + cham "..." + chop mat nhieu lan) -> ha bao -> ve idle.
+// To bao = ANH THAT (bao_img), ho trong suot cho mat lo qua khe giua 2 trang.
 static void pet_read(uint32_t now) {
     lv_canvas_fill_bg(petCanvas, lv_color_black(), LV_OPA_COVER);
-    lv_color_t cyan  = lv_color_hex(0x33E1FF);
-    lv_color_t paper = lv_color_hex(0xCDEEF7);   // giay xanh rat nhat
-    lv_color_t ink   = lv_color_hex(0x3A93B0);   // chu
+    lv_color_t cyan = lv_color_hex(0x33E1FF);
+    lv_color_t dim  = lv_color_hex(0x0E3A44);
     int cx = PET_CW / 2;
-    int xL = cx - EYE_SP / 2 - EYE_W, xR = cx + EYE_SP / 2;
 
-    // mat to ban nhin xuong (thap, bo tron) - luot doc qua lai
-    int scan = (int)(sinf(now * 0.0035f) * 10);
-    int ey = 20, eh = 34;
-    pet_rrect(xL + scan, ey, EYE_W, eh, 15, cyan);
-    pet_rrect(xR + scan, ey, EYE_W, eh, 15, cyan);
+    const uint32_t T = 10300;
+    uint32_t t = now % T;
 
-    // to bao: 1 tam giay bo tron sach, gap giua, tieu de + 3 dong moi ben
-    int px = 16, py = 66, pw = PET_CW - 32, pb = 172;
-    pet_rrect(px, py, pw, pb - py, 10, paper);
-    pet_rrect(cx - 2, py + 8, 4, (pb - py) - 16, 2, ink);     // gap giua
-    pet_rrect(px + 14, py + 12, pw - 28, 14, 4, ink);         // tieu de dam
-    for (int i = 0; i < 3; i++) {
-        int ly = py + 40 + i * 18;
-        pet_rrect(px + 14, ly, pw / 2 - 22, 7, 3, ink);       // cot trai
-        pet_rrect(cx + 8,  ly, pw / 2 - 22, 7, 3, ink);       // cot phai
+    // --- To bao theo pha ---
+    int yoff = 0, wob = 0; bool showPaper = true;
+    if (t < 800)        showPaper = false;                                 // idle + mo mat
+    else if (t < 1200)  yoff = (int)((1.0f - (t - 800) / 400.0f) * 130);   // truot len
+    else if (t < 1450)  wob  = (int)(sinf((t - 1200) * 0.05f) * 4);        // lac nhe vao vi tri
+    else if (t < 9500)  yoff = 0;                                          // DANG DOC (~8s)
+    else if (t < 9850)  yoff = (int)(((t - 9500) / 350.0f) * 150);         // ha bao truot xuong
+    else                showPaper = false;                                 // ve idle
+
+    // --- Nhun nhe khi doc: nhap nho theo chieu doc + dung dua ngang ---
+    bool reading = (t >= 1450 && t < 9500);
+    int bob = 0, sway = 0;
+    if (reading) {
+        bob  = (int)(sinf(now * 0.005f) * 3);      // len xuong ~3px
+        sway = (int)(sinf(now * 0.0031f) * 2);     // qua lai ~2px
+    }
+
+    // --- Mat: idle nho; doc to hon; mo mat phong to dan; chop nhieu lan khi doc ---
+    int ew = 56, eh = 32;
+    if (t >= 500 && t < 800)      { float k = (t - 500) / 300.0f; ew = 56 + (int)(k * 6); eh = 32 + (int)(k * 6); }
+    else if (t >= 800 && t < 9850){ ew = 62; eh = 38; }
+    bool blink = (t > 2800 && t < 2980) || (t > 4400 && t < 4580) ||
+                 (t > 6000 && t < 6180) || (t > 7600 && t < 7780) || (t > 9000 && t < 9180);
+    pet_read_eyes(cx, 60 + bob / 2, ew, eh, 14, blink, cyan);   // +16: canh giua canvas cao 208
+
+    // --- To bao (anh that) truot theo yoff, nhun (bob) + dung dua (sway) ---
+    if (showPaper) {
+        lv_draw_img_dsc_t idsc; lv_draw_img_dsc_init(&idsc);
+        int bx = (PET_CW - bao_img.header.w) / 2 + wob + sway;
+        lv_canvas_draw_img(petCanvas, bx, 90 + yoff + bob, &bao_img, &idsc);
+    }
+
+    // --- Cham "..." khi dang doc (dom sang lan luot) ---
+    if (reading) {
+        int nd = ((t - 1450) / 350) % 4;
+        for (int i = 0; i < 3; i++)
+            pet_circle(cx - 16 + i * 16, 36 + bob / 2, 3, (i < nd) ? cyan : dim);
     }
 }
 
@@ -1216,77 +1259,32 @@ static void pet_bolt(int cx, int cy, lv_color_t c) {
     pet_tri(cx - 5, cy + 16, cx + 10, cy - 3, cx - 2, cy - 1, c);
 }
 
-// An pho - MIENG chum "O" mut 1 cong mi luon song bi hut ngan dan tu to len,
-// khoi bay len, ket thuc bang nham mat ^^ cuoi suong ("ngon!") roi lap lai.
+// An pho: flipbook 7 frame ANH THAT (eat_imgs tu assets/eat1..7). Chieu 1->7, giu lau
+// frame cuoi (tim tim, no ne), co nhun nhe cho sinh dong, roi lap.
+// TOI UU: moi frame la anh RGB565+ALPHA ~200x208 -> blit (alpha-blend tung diem) + flush
+// ca canvas rat nang tren C3. Truoc day ve LAI moi tick 40ms (25fps) du hinh gan nhu khong
+// doi -> giat. Nay chi ve khi THUC SU doi (doi frame hoac doi vi tri nhun y) -> giam ~3x
+// so lan blit/flush, van giu nhun nhe.
 static void pet_pho(uint32_t now) {
+    static const uint16_t DUR[EAT_FRAMES] = {700, 350, 350, 500, 350, 400, 1700};  // ms/frame
+    uint32_t total = 0;
+    for (int i = 0; i < EAT_FRAMES; i++) total += DUR[i];
+    uint32_t t = now % total;
+    int f = EAT_FRAMES - 1; uint32_t acc = 0;
+    for (int i = 0; i < EAT_FRAMES; i++) { acc += DUR[i]; if (t < acc) { f = i; break; } }
+
+    const lv_img_dsc_t *img = eat_imgs[f];
+    int bob = (int)(sinf(now * 0.005f) * 2);            // nhun nhe +-2px
+    int x = (PET_CW - img->header.w) / 2;
+    int y = (PET_CH - img->header.h) / 2 + bob;
+
+    // Hinh y het lan truoc -> bo qua (khong dong canvas -> khong flush SPI -> het giat)
+    if (f == petPhoLastF && y == petPhoLastY) return;
+    petPhoLastF = f; petPhoLastY = y;
+
     lv_canvas_fill_bg(petCanvas, lv_color_black(), LV_OPA_COVER);
-    lv_color_t cyan  = lv_color_hex(0x33E1FF);
-    lv_color_t nood  = lv_color_hex(0xF3E7C0);   // cong mi (vang kem)
-    lv_color_t deep  = lv_color_hex(0x1C88A6);   // than to
-    lv_color_t broth = lv_color_hex(0x2FB6D8);   // nuoc dung / khoi
-    lv_color_t wood  = lv_color_hex(0xC98A4B);   // dua go
-    lv_color_t yel   = lv_color_hex(0xFFD23F);
-    int cx  = PET_CW / 2;
-    int bob = (int)(sinf(now * 0.005f) * 2);     // dau gat gu nhe
-
-    // ---- Chu ky hut: 0..0.72 hut mi, 0.72..1 nham mat cuoi "ngon" ----
-    const uint32_t T = 1600;
-    float p     = (now % T) / (float)T;
-    bool  savor = p > 0.72f;
-    float slurp = savor ? 1.0f : (p / 0.72f);    // 0..1: cong mi bi mut ngan dan
-
-    int my    = 92 + bob;                        // tam mieng
-    int bowlY = 128;                             // mat nuoc trong to
-
-    // ---- Mat: nhin xuong to (hoi nheo giua chung hut) / ^^ khi ngon ----
-    int ey = 32 + bob, exL = cx - 46, exR = cx + 46;
-    if (savor) {
-        pet_arc(exL, ey + 6, 22, 200, 340, 9, cyan);         // ^ mat trai
-        pet_arc(exR, ey + 6, 22, 200, 340, 9, cyan);         // ^ mat phai
-    } else {
-        int eh = 30 - (int)(sinf(slurp * 3.14159f) * 9);     // nheo lai luc hut manh nhat
-        pet_rrect(exL - 17, ey - eh / 2, 34, eh, 13, cyan);
-        pet_rrect(exR - 17, ey - eh / 2, 34, eh, 13, cyan);
-    }
-
-    // ---- Khoi bay len (3 luong troi lien tuc) ----
-    for (int i = 0; i < 3; i++) {
-        int rise = (int)((now / 22 + i * 22) % 46);
-        int sx = cx - 30 + i * 30 + (int)(sinf(now * 0.006f + i * 1.7f) * 5);
-        pet_circle(sx, 120 - rise, 3, broth);
-    }
-
-    // ---- Cong mi luon song bi hut tu to len mieng (ve TRUOC mieng -> chui vao mieng) ----
-    if (!savor) {
-        int top = my + 4;
-        int bot = bowlY - (int)(slurp * (bowlY - top));       // day cong mi dang len dan
-        for (int y = top; y <= bot; y += 5) {
-            float t   = (float)(y - top);
-            float amp = 9.0f * (1.0f - slurp * 0.45f);         // hut cang nhieu, cong cang thang
-            int   x   = cx + (int)(sinf(t * 0.11f + now * 0.022f) * amp);
-            pet_circle(x, y, 4, nood);
-        }
-    }
-
-    // ---- Mieng: "O" chum mut / cuoi tuoi khi ngon ----
-    if (savor) {
-        pet_arc(cx, my - 8, 15, 20, 160, 6, cyan);            // cuoi ∪
-        pet_bolt(cx + 44, my - 26, yel);                      // tia sao "ngon!"
-        pet_bolt(cx - 44, my - 20, yel);
-    } else {
-        int mr = 11 + (int)(sinf(now * 0.03f) * 2);           // chum-nha nhip mut
-        pet_circle(cx, my, mr, cyan);
-        pet_circle(cx, my, mr - 5, lv_color_black());          // long mieng: mi chui vao day
-    }
-
-    // ---- To pho + nuoc dung + dua go ----
-    int rw = 150;
-    pet_rrect(cx - rw / 2 - 4, bowlY - 6, rw + 8, 12, 6, cyan);       // vanh to
-    pet_quad(cx - rw / 2, bowlY, cx + rw / 2, bowlY,
-             cx + rw / 2 - 26, bowlY + 40, cx - rw / 2 + 26, bowlY + 40, deep);
-    pet_rrect(cx - rw / 2 + 8, bowlY - 2, rw - 16, 5, 2, broth);      // mat nuoc sanh
-    pet_rrect(cx + 22, bowlY - 50, 5, 58, 2, wood);                   // dua 1
-    pet_rrect(cx + 32, bowlY - 50, 5, 58, 2, wood);                   // dua 2
+    lv_draw_img_dsc_t idsc; lv_draw_img_dsc_init(&idsc);
+    lv_canvas_draw_img(petCanvas, x, y, img, &idsc);
 }
 
 // Menu chon animation - ve trang len canvas, dieu khien bang nut A/B/C
@@ -1339,6 +1337,7 @@ static void build_pet(lv_obj_t *scr) {
     petTWander = petTBlink = petTBlinkOpen = petHappyUntil = petLastFrame = 0;
     petAct = 0; petActUntil = 0; petTAct = 0;
     petMenuOpen = false; petLock = false; petMenuSel = 0;
+    petPhoLastF = -1;                          // canvas moi cap phat -> ep ve lai frame an pho dau tien
     pet_render(0, EYE_H, EYE_H, 0, 0, lv_color_hex(0x33E1FF));
 }
 
