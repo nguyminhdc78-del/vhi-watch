@@ -1039,29 +1039,52 @@ static void build_reply(lv_obj_t *scr) {
 }
 
 // ============================================================
-//  VECTOR - thu cung mat cyan (LVGL - muot, khong nhap nhay)
+//  VECTOR - thu cung mat cyan + mieng (LVGL canvas -> muot, ve hinh cong)
 // ============================================================
-static lv_obj_t *petEyeL = nullptr, *petEyeR = nullptr, *petZ = nullptr;
+#define PET_CW 200
+#define PET_CH 150
+static lv_color_t petCanvasBuf[PET_CW * PET_CH];   // bo dem an (~60KB) - ve xong day nguyen khung, khong nhay
+static lv_obj_t *petCanvas = nullptr, *petZ = nullptr;
 
-// Cap nhat kich thuoc/vi tri 1 mat
-static void pet_set_eye(lv_obj_t *e, int cx, int cy, int w, int h, int r) {
-    lv_obj_set_size(e, w, h);
-    lv_obj_set_style_radius(e, r, 0);
-    lv_obj_set_pos(e, cx - w / 2, cy - h / 2);
+static void pet_eye_rect(int cx, int cy, int w, int h, int r, lv_color_t col) {
+    lv_draw_rect_dsc_t d; lv_draw_rect_dsc_init(&d);
+    d.bg_color = col; d.bg_opa = LV_OPA_COVER; d.radius = r;
+    lv_canvas_draw_rect(petCanvas, cx - w / 2, cy - h / 2, w, h, &d);
+}
+static void pet_arc(int cx, int cy, int r, int a0, int a1, int width, lv_color_t col) {
+    lv_draw_arc_dsc_t d; lv_draw_arc_dsc_init(&d);
+    d.color = col; d.width = width; d.rounded = 1;
+    lv_canvas_draw_arc(petCanvas, cx, cy, r, a0, a1, &d);
 }
 
 static void pet_apply(int mood) {   // 0=neutral 1=blink 2=happy 3=sleepy 4=excited
-    int cxL = 92 + petLookX, cxR = 148 + petLookX, cy = 122 + petLookY;
-    int w, h, r, dy = 0;
-    switch (mood) {
-        case 1: w = 48; h = 10; r = 5;  break;                 // BLINK
-        case 2: w = 48; h = 26; r = 13; dy = 4;  break;        // HAPPY (nheo cuoi)
-        case 3: w = 48; h = 12; r = 6;  dy = 10; break;        // SLEEPY (lim dim)
-        case 4: w = 54; h = 80; r = 18; break;                 // EXCITED (mat to)
-        default: w = 48; h = 66; r = 16; break;                // NEUTRAL
+    if (!petCanvas) return;
+    lv_canvas_fill_bg(petCanvas, lv_color_black(), LV_OPA_COVER);
+    lv_color_t col = lv_color_hex(0x2FE6FF);           // cyan Vector
+    int cx = PET_CW / 2 + petLookX, cy = PET_CH / 2 + petLookY;
+    int exL = cx - 34, exR = cx + 34, ey = cy - 22, my = cy + 40;
+
+    if (mood == 1) {                        // BLINK: mat vach + cuoi
+        pet_eye_rect(exL, ey, 40, 10, 5, col);
+        pet_eye_rect(exR, ey, 40, 10, 5, col);
+        pet_arc(cx, my, 22, 30, 150, 7, col);
+    } else if (mood == 2) {                 // HAPPY: mat vom ^ ^ + cuoi
+        pet_arc(exL, ey + 12, 22, 200, 340, 8, col);
+        pet_arc(exR, ey + 12, 22, 200, 340, 8, col);
+        pet_arc(cx, my, 24, 25, 155, 8, col);
+    } else if (mood == 3) {                 // SLEEPY: mat lim + mieng nho
+        pet_eye_rect(exL, ey + 14, 40, 8, 4, col);
+        pet_eye_rect(exR, ey + 14, 40, 8, 4, col);
+        pet_arc(cx, my, 16, 40, 140, 5, col);
+    } else if (mood == 4) {                 // EXCITED: mat to + mieng mo
+        pet_eye_rect(exL, ey, 44, 62, 16, col);
+        pet_eye_rect(exR, ey, 44, 62, 16, col);
+        pet_eye_rect(cx, my + 6, 34, 28, 14, col);
+    } else {                                // NEUTRAL: mat rect + cuoi
+        pet_eye_rect(exL, ey, 40, 56, 14, col);
+        pet_eye_rect(exR, ey, 40, 56, 14, col);
+        pet_arc(cx, my, 22, 30, 150, 7, col);
     }
-    pet_set_eye(petEyeL, cxL, cy + dy, w, h, r);
-    pet_set_eye(petEyeR, cxR, cy + dy, w, h, r);
     if (petZ) {
         if (mood == 3) lv_obj_clear_flag(petZ, LV_OBJ_FLAG_HIDDEN);
         else           lv_obj_add_flag(petZ, LV_OBJ_FLAG_HIDDEN);
@@ -1072,21 +1095,15 @@ static void build_pet(lv_obj_t *scr) {
     lv_obj_set_style_bg_color(scr, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
 
-    lv_color_t cyan = lv_color_hex(0x00E5FF);
-    petEyeL = lv_obj_create(scr);
-    petEyeR = lv_obj_create(scr);
-    for (lv_obj_t *e : {petEyeL, petEyeR}) {
-        lv_obj_clear_flag(e, LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_set_style_bg_color(e, cyan, 0);
-        lv_obj_set_style_bg_opa(e, LV_OPA_COVER, 0);
-        lv_obj_set_style_border_width(e, 0, 0);
-        lv_obj_set_style_pad_all(e, 0, 0);
-    }
+    petCanvas = lv_canvas_create(scr);
+    lv_canvas_set_buffer(petCanvas, petCanvasBuf, PET_CW, PET_CH, LV_IMG_CF_TRUE_COLOR);
+    lv_obj_center(petCanvas);
+
     petZ = lv_label_create(scr);
     lv_obj_set_style_text_font(petZ, &lv_font_montserrat_20, 0);
-    lv_obj_set_style_text_color(petZ, cyan, 0);
+    lv_obj_set_style_text_color(petZ, lv_color_hex(0x2FE6FF), 0);
     lv_label_set_text(petZ, "z z");
-    lv_obj_align(petZ, LV_ALIGN_TOP_RIGHT, -30, 40);
+    lv_obj_align(petZ, LV_ALIGN_TOP_RIGHT, -28, 34);
     lv_obj_add_flag(petZ, LV_OBJ_FLAG_HIDDEN);
 
     petLastFrame = 0; petNextBlink = 0; petNextLook = 0;
@@ -1097,10 +1114,12 @@ static void build_pet(lv_obj_t *scr) {
 
 // Goi moi vong loop() -> hoat hinh Vector (chi lam viec khi dang o man Pet)
 void ui_fast_tick() {
-    if (g_cur != SCR_PET || !petEyeL) return;
+    if (g_cur != SCR_PET || !petCanvas) return;
     uint32_t now = millis();
     if (now - petLastFrame < 70) return;   // ~14fps
     petLastFrame = now;
+
+    if (g_notify.hasNew) { g_notify.hasNew = false; petExcitedUntil = now + 2500; }  // tin nhan -> reo
 
     if (!petBlinking && now >= petNextBlink) { petBlinking = true; petBlinkStart = now; }
     if (petBlinking && now - petBlinkStart > 130) {
@@ -1138,7 +1157,7 @@ static void show_screen(Screen s) {
     lblTmrTime = lblTmrMode = nullptr;
     lblDialInfo = nullptr;
     lblReplyInfo = nullptr;
-    petEyeL = petEyeR = petZ = nullptr;
+    petCanvas = petZ = nullptr;
     navArrow = navDist = navStreet = navEta = nullptr;
     navLine = navDot = nullptr;
     lblNApp = lblNTitle = lblNText = nullptr;
