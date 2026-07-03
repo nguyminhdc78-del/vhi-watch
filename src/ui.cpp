@@ -71,13 +71,11 @@ static void reply_refresh();
 static int  replySel = 0;
 static lv_obj_t *replyBtns[MAX_REPLIES];
 static lv_obj_t *lblReplyInfo = nullptr;
-// Vector pet state (dung o key_handler + ui_fast_tick)
-static uint32_t petNextBlink = 0, petBlinkStart = 0, petNextLook = 0;
-static bool     petBlinking = false;
-static int      petLookX = 0, petLookY = 0;
-static uint32_t petHappyUntil = 0, petExcitedUntil = 0, petLastFrame = 0;
-static int      petIdleMood = 0;          // bieu cam tu doi ngau nhien
-static uint32_t petIdleUntil = 0;
+// Vector pet state (port RoboEyes) - dung o key_handler + ui_fast_tick
+static float    pex = 0, pexN = 0, pey = 0, peyN = 0;   // wander offset (current, target)
+static float    peh = 68, pehN = 68;                    // eye height (blink)
+static uint32_t petTWander = 0, petTBlink = 0, petTBlinkOpen = 0;
+static uint32_t petHappyUntil = 0, petLastFrame = 0;
 
 // ---------- tien ich ----------
 static lv_obj_t* make_root() {
@@ -1041,132 +1039,94 @@ static void build_reply(lv_obj_t *scr) {
 }
 
 // ============================================================
-//  VECTOR - thu cung mat cyan + mieng (LVGL canvas -> muot, ve hinh cong)
+//  VECTOR - mat robot hoat hinh (port tu FluxGarage RoboEyes)
+//  Mat bo tron + easing muot + mat tu di lang thang (wander) + chop.
+//  Cam xuc: vui = mi mat DUOI cong len; met/ngu = mi mat TREN xech.
 // ============================================================
-#define PET_CW 216
-#define PET_CH 200
-static lv_color_t petCanvasBuf[PET_CW * PET_CH];   // bo dem an - ve xong day nguyen khung, khong nhay
-static lv_obj_t *petCanvas = nullptr, *petZ = nullptr;
+#define PET_CW 224
+#define PET_CH 176
+#define EYE_W  72
+#define EYE_H  76
+#define EYE_R  22
+#define EYE_SP 26
+static lv_color_t petCanvasBuf[PET_CW * PET_CH];   // bo dem an -> ve nguyen khung, khong nhay
+static lv_obj_t *petCanvas = nullptr;
 
-static void pet_eye_rect(int cx, int cy, int w, int h, int r, lv_color_t col) {
+static void pet_rrect(int x, int y, int w, int h, int r, lv_color_t c) {
     lv_draw_rect_dsc_t d; lv_draw_rect_dsc_init(&d);
-    d.bg_color = col; d.bg_opa = LV_OPA_COVER; d.radius = r;
-    lv_canvas_draw_rect(petCanvas, cx - w / 2, cy - h / 2, w, h, &d);
+    d.bg_color = c; d.bg_opa = LV_OPA_COVER; d.radius = r;
+    lv_canvas_draw_rect(petCanvas, x, y, w, h, &d);
 }
-static void pet_arc(int cx, int cy, int r, int a0, int a1, int width, lv_color_t col) {
-    lv_draw_arc_dsc_t d; lv_draw_arc_dsc_init(&d);
-    d.color = col; d.width = width; d.rounded = 1;
-    lv_canvas_draw_arc(petCanvas, cx, cy, r, a0, a1, &d);
-}
-// Mat tron day + dom sang cho de thuong
-static void pet_eye(int cx, int cy, int w, int h, int r, lv_color_t col) {
-    pet_eye_rect(cx, cy, w, h, r, col);
+static void pet_tri(int x0, int y0, int x1, int y1, int x2, int y2, lv_color_t c) {
+    lv_point_t p[3] = {{(lv_coord_t)x0,(lv_coord_t)y0},{(lv_coord_t)x1,(lv_coord_t)y1},{(lv_coord_t)x2,(lv_coord_t)y2}};
     lv_draw_rect_dsc_t d; lv_draw_rect_dsc_init(&d);
-    d.bg_color = lv_color_white(); d.bg_opa = LV_OPA_COVER; d.radius = LV_RADIUS_CIRCLE;
-    int s = w / 3;
-    lv_canvas_draw_rect(petCanvas, cx - w / 5 - s / 2, cy - h / 4 - s / 2, s, s, &d);
+    d.bg_color = c; d.bg_opa = LV_OPA_COVER;
+    lv_canvas_draw_polygon(petCanvas, p, 3, &d);
 }
 
-static void pet_apply(int mood) {  // 0=neutral 1=blink 2=happy 3=sleepy 4=excited 5=content 6=surprised 7=wink
-    if (!petCanvas) return;
+static void pet_render(bool happy, bool tired) {
     lv_canvas_fill_bg(petCanvas, lv_color_black(), LV_OPA_COVER);
-    lv_color_t col = lv_color_hex(0x2FE6FF);           // cyan Vector
-    int cx = PET_CW / 2 + petLookX, cy = PET_CH / 2 + petLookY;
-    int exL = cx - 48, exR = cx + 48, ey = cy - 18, my = cy + 58;   // mat TO, cach xa, lap man
+    lv_color_t col = lv_color_hex(0x33E1FF), bg = lv_color_black();
+    int lh = (int)(peh + 0.5f);
+    int ccx = PET_CW / 2 + (int)pex, ccy = PET_CH / 2 + (int)pey;
+    int xL = ccx - EYE_SP / 2 - EYE_W;      // top-left goc mat trai
+    int xR = ccx + EYE_SP / 2;
+    int yT = ccy - lh / 2;
 
-    switch (mood) {
-        case 1:  // BLINK
-            pet_eye_rect(exL, ey, 62, 16, 8, col); pet_eye_rect(exR, ey, 62, 16, 8, col);
-            pet_arc(cx, my, 30, 30, 150, 10, col); break;
-        case 2:  // HAPPY: mat vom ^ ^ + cuoi
-            pet_arc(exL, ey + 20, 34, 200, 340, 13, col); pet_arc(exR, ey + 20, 34, 200, 340, 13, col);
-            pet_arc(cx, my, 36, 22, 158, 13, col); break;
-        case 3:  // SLEEPY
-            pet_eye_rect(exL, ey + 22, 62, 12, 6, col); pet_eye_rect(exR, ey + 22, 62, 12, 6, col);
-            pet_arc(cx, my, 22, 40, 140, 7, col); break;
-        case 4:  // EXCITED: mat to + mieng mo
-            pet_eye(exL, ey, 66, 92, 30, col); pet_eye(exR, ey, 66, 92, 30, col);
-            pet_eye_rect(cx, my + 8, 50, 42, 21, col); break;
-        case 5:  // CONTENT: nheo + cuoi to
-            pet_eye_rect(exL, ey + 10, 62, 28, 14, col); pet_eye_rect(exR, ey + 10, 62, 28, 14, col);
-            pet_arc(cx, my, 40, 18, 162, 13, col); break;
-        case 6:  // SURPRISED: mat tron to + mieng o
-            pet_eye(exL, ey, 74, 84, 37, col); pet_eye(exR, ey, 74, 84, 37, col);
-            pet_eye_rect(cx, my + 2, 32, 34, 17, col); break;
-        case 7:  // WINK: 1 mat nham ^, 1 mat mo
-            pet_arc(exL, ey + 20, 34, 200, 340, 13, col);
-            pet_eye(exR, ey, 64, 88, 29, col);
-            pet_arc(cx, my, 34, 22, 158, 12, col); break;
-        default: // NEUTRAL: mat tron to + cuoi
-            pet_eye(exL, ey, 64, 88, 29, col); pet_eye(exR, ey, 64, 88, 29, col);
-            pet_arc(cx, my, 30, 30, 150, 10, col); break;
-    }
-    if (petZ) {
-        if (mood == 3) lv_obj_clear_flag(petZ, LV_OBJ_FLAG_HIDDEN);
-        else           lv_obj_add_flag(petZ, LV_OBJ_FLAG_HIDDEN);
+    pet_rrect(xL, yT, EYE_W, lh, EYE_R, col);
+    pet_rrect(xR, yT, EYE_W, lh, EYE_R, col);
+
+    if (happy) {                             // mi duoi cong len -> mat cuoi
+        int off = (int)(lh * 0.55f);
+        pet_rrect(xL - 2, yT + lh - off, EYE_W + 4, EYE_H, EYE_R, bg);
+        pet_rrect(xR - 2, yT + lh - off, EYE_W + 4, EYE_H, EYE_R, bg);
+    } else if (tired) {                      // mi tren xech ngoai -> met/ngu
+        int th = lh / 2;
+        pet_tri(xL, yT - 1, xL + EYE_W, yT - 1, xL, yT + th, bg);            // mat trai: ngoai = ben trai
+        pet_tri(xR, yT - 1, xR + EYE_W, yT - 1, xR + EYE_W, yT + th, bg);    // mat phai: ngoai = ben phai
     }
 }
 
 static void build_pet(lv_obj_t *scr) {
     lv_obj_set_style_bg_color(scr, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
-
     petCanvas = lv_canvas_create(scr);
     lv_canvas_set_buffer(petCanvas, petCanvasBuf, PET_CW, PET_CH, LV_IMG_CF_TRUE_COLOR);
     lv_obj_center(petCanvas);
 
-    petZ = lv_label_create(scr);
-    lv_obj_set_style_text_font(petZ, &lv_font_montserrat_20, 0);
-    lv_obj_set_style_text_color(petZ, lv_color_hex(0x2FE6FF), 0);
-    lv_label_set_text(petZ, "z z");
-    lv_obj_align(petZ, LV_ALIGN_TOP_RIGHT, -28, 34);
-    lv_obj_add_flag(petZ, LV_OBJ_FLAG_HIDDEN);
-
-    petLastFrame = 0; petNextBlink = 0; petNextLook = 0;
-    petBlinking = false; petLookX = petLookY = 0;
-    petHappyUntil = petExcitedUntil = 0;
-    pet_apply(0);
+    pex = pexN = pey = peyN = 0; peh = pehN = EYE_H;
+    petTWander = petTBlink = petTBlinkOpen = petHappyUntil = petLastFrame = 0;
+    pet_render(false, false);
 }
 
-// Goi moi vong loop() -> hoat hinh Vector (chi lam viec khi dang o man Pet)
+// Goi moi vong loop() -> hoat hinh Vector (chi khi o man Pet)
 void ui_fast_tick() {
     if (g_cur != SCR_PET || !petCanvas) return;
     uint32_t now = millis();
-    if (now - petLastFrame < 70) return;   // ~14fps
+    if (now - petLastFrame < 40) return;    // ~25fps cho easing muot
     petLastFrame = now;
 
-    if (g_notify.hasNew) { g_notify.hasNew = false; petExcitedUntil = now + 2500; }  // tin nhan -> reo
+    if (g_notify.hasNew) { g_notify.hasNew = false; petHappyUntil = now + 2200; }  // tin nhan -> cuoi
 
-    if (!petBlinking && now >= petNextBlink) { petBlinking = true; petBlinkStart = now; }
-    if (petBlinking && now - petBlinkStart > 130) {
-        petBlinking = false;
-        petNextBlink = now + 1800 + (uint32_t)random(0, 3500);
+    // Mat tu di lang thang (wander)
+    if (now >= petTWander) {
+        pexN = (float)random(-36, 37);
+        peyN = (float)random(-22, 23);
+        petTWander = now + 800 + (uint32_t)random(0, 2200);
     }
-    if (now >= petNextLook) {
-        petLookX = (int)random(-14, 15);
-        petLookY = (int)random(-8, 9);
-        petNextLook = now + 1400 + (uint32_t)random(0, 3000);
-    }
-    // Tu doi bieu cam ngau nhien cho sinh dong
-    if (now >= petIdleUntil) {
-        int r = (int)random(0, 100);
-        if      (r < 34) petIdleMood = 0;   // binh thuong
-        else if (r < 58) petIdleMood = 2;   // vui ^^
-        else if (r < 73) petIdleMood = 5;   // nheo cuoi
-        else if (r < 86) petIdleMood = 6;   // ngac nhien
-        else             petIdleMood = 7;   // nhay mat
-        petIdleUntil = now + 1600 + (uint32_t)random(0, 2600);
-    }
+    // Chop mat
+    if (now >= petTBlink && pehN >= EYE_H) { pehN = 6; petTBlinkOpen = now + 110; }
+    if (pehN < EYE_H && now >= petTBlinkOpen) { pehN = EYE_H; petTBlink = now + 1600 + (uint32_t)random(0, 3600); }
+
+    // Easing muot toi dich
+    pex += (pexN - pex) * 0.30f;
+    pey += (peyN - pey) * 0.30f;
+    peh += (pehN - peh) * 0.45f;
 
     struct tm tm;
     bool night = wf_get_time(tm) && (tm.tm_hour >= 22 || tm.tm_hour < 6);
-    int mood;
-    if (now < petExcitedUntil)    mood = 4;
-    else if (now < petHappyUntil) mood = 2;
-    else if (night)               mood = 3;
-    else if (petBlinking)         mood = 1;
-    else                          mood = petIdleMood;
-    pet_apply(mood);
+    bool happy = now < petHappyUntil;
+    pet_render(happy, night && !happy);
 }
 
 // ============================================================
@@ -1183,7 +1143,7 @@ static void show_screen(Screen s) {
     lblTmrTime = lblTmrMode = nullptr;
     lblDialInfo = nullptr;
     lblReplyInfo = nullptr;
-    petCanvas = petZ = nullptr;
+    petCanvas = nullptr;
     navArrow = navDist = navStreet = navEta = nullptr;
     navLine = navDot = nullptr;
     lblNApp = lblNTitle = lblNText = nullptr;
