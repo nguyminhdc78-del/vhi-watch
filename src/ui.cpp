@@ -76,6 +76,9 @@ static float    pex = 0, pexN = 0, pey = 0, peyN = 0;   // wander offset (curren
 static float    peh = 68, pehN = 68;                    // eye height (blink)
 static uint32_t petTWander = 0, petTBlink = 0, petTBlinkOpen = 0;
 static uint32_t petHappyUntil = 0, petLastFrame = 0;
+// Bo "dao dien" tu doi tro: 0 idle 1 happy 2 laugh 3 confused 4 wink 5 angry 6 look
+static int      petAct = 0, petWinkEye = 0;
+static uint32_t petActUntil = 0, petTAct = 0;
 
 // ---------- tien ich ----------
 static lv_obj_t* make_root() {
@@ -777,8 +780,9 @@ static void key_handler(lv_event_t *e) {
             break;
 
         case SCR_PET:
-            if (key == LV_KEY_DOWN || key == LV_KEY_ENTER) petHappyUntil = millis() + 1600; // A/B: vuot ve -> vui
-            else if (key == LV_KEY_ESC) request_screen(SCR_MENU);        // C: quay lai menu
+            if (key == LV_KEY_ENTER)     { petAct = 7; petActUntil = millis() + 2800; } // A: cham -> mat trai tim
+            else if (key == LV_KEY_DOWN) { petAct = 2; petActUntil = millis() + 2600; } // B: cham -> cuoi ha ha
+            else if (key == LV_KEY_ESC)  request_screen(SCR_MENU);        // C: quay lai menu
             break;
 
         case SCR_DIAL:
@@ -1063,28 +1067,69 @@ static void pet_tri(int x0, int y0, int x1, int y1, int x2, int y2, lv_color_t c
     d.bg_color = c; d.bg_opa = LV_OPA_COVER;
     lv_canvas_draw_polygon(petCanvas, p, 3, &d);
 }
+static void pet_circle(int cx, int cy, int r, lv_color_t c) {
+    pet_rrect(cx - r, cy - r, 2 * r, 2 * r, r, c);
+}
+static void pet_arc(int cx, int cy, int r, int a0, int a1, int w, lv_color_t c) {
+    lv_draw_arc_dsc_t d; lv_draw_arc_dsc_init(&d);
+    d.color = c; d.width = w; d.rounded = 1;
+    lv_canvas_draw_arc(petCanvas, cx, cy, r, a0, a1, &d);
+}
+// Trai tim = 2 hinh tron + 1 tam giac chuc xuong
+static void pet_heart(int cx, int cy, int R, lv_color_t c) {
+    pet_circle(cx - R, cy, R, c);
+    pet_circle(cx + R, cy, R, c);
+    pet_tri(cx - 2 * R, cy, cx + 2 * R, cy, cx, cy + 2 * R + R / 3, c);
+}
 
-static void pet_render(bool happy, bool tired) {
+// mood: 0 none  1 happy(cuoi)  2 tired(ngu)  3 angry(gian)
+// hlL/hlR: chieu cao rieng mat trai/phai (de nheo mat, curious phong to)
+static void pet_render(int mood, int hlL, int hlR, int dx, int dy, lv_color_t col) {
     lv_canvas_fill_bg(petCanvas, lv_color_black(), LV_OPA_COVER);
-    lv_color_t col = lv_color_hex(0x33E1FF), bg = lv_color_black();
-    int lh = (int)(peh + 0.5f);
-    int ccx = PET_CW / 2 + (int)pex, ccy = PET_CH / 2 + (int)pey;
+    lv_color_t bg = lv_color_black();
+    int ccx = PET_CW / 2 + (int)pex + dx, ccy = PET_CH / 2 + (int)pey + dy;
     int xL = ccx - EYE_SP / 2 - EYE_W;      // top-left goc mat trai
     int xR = ccx + EYE_SP / 2;
-    int yT = ccy - lh / 2;
+    int yTL = ccy - hlL / 2, yTR = ccy - hlR / 2;
 
-    pet_rrect(xL, yT, EYE_W, lh, EYE_R, col);
-    pet_rrect(xR, yT, EYE_W, lh, EYE_R, col);
+    pet_rrect(xL, yTL, EYE_W, hlL, EYE_R, col);
+    pet_rrect(xR, yTR, EYE_W, hlR, EYE_R, col);
 
-    if (happy) {                             // mi duoi cong len -> mat cuoi
-        int off = (int)(lh * 0.55f);
-        pet_rrect(xL - 2, yT + lh - off, EYE_W + 4, EYE_H, EYE_R, bg);
-        pet_rrect(xR - 2, yT + lh - off, EYE_W + 4, EYE_H, EYE_R, bg);
-    } else if (tired) {                      // mi tren xech ngoai -> met/ngu
-        int th = lh / 2;
-        pet_tri(xL, yT - 1, xL + EYE_W, yT - 1, xL, yT + th, bg);            // mat trai: ngoai = ben trai
-        pet_tri(xR, yT - 1, xR + EYE_W, yT - 1, xR + EYE_W, yT + th, bg);    // mat phai: ngoai = ben phai
+    if (mood == 1) {                         // mi duoi cong len -> mat cuoi
+        int oL = (int)(hlL * 0.55f), oR = (int)(hlR * 0.55f);
+        pet_rrect(xL - 2, yTL + hlL - oL, EYE_W + 4, EYE_H, EYE_R, bg);
+        pet_rrect(xR - 2, yTR + hlR - oR, EYE_W + 4, EYE_H, EYE_R, bg);
+    } else if (mood == 2) {                  // mi tren xech NGOAI -> met/ngu
+        int tL = hlL / 2, tR = hlR / 2;
+        pet_tri(xL, yTL - 1, xL + EYE_W, yTL - 1, xL, yTL + tL, bg);
+        pet_tri(xR, yTR - 1, xR + EYE_W, yTR - 1, xR + EYE_W, yTR + tR, bg);
+    } else if (mood == 3) {                  // mi tren xech TRONG -> gian du
+        int tL = hlL / 2, tR = hlR / 2;
+        pet_tri(xL, yTL - 1, xL + EYE_W, yTL - 1, xL + EYE_W, yTL + tL, bg);
+        pet_tri(xR, yTR - 1, xR + EYE_W, yTR - 1, xR, yTR + tR, bg);
     }
+}
+
+// Mat trai tim mau do (love) - co nhip dap phong to thu nho
+static void pet_love(uint32_t now) {
+    lv_canvas_fill_bg(petCanvas, lv_color_black(), LV_OPA_COVER);
+    lv_color_t red = lv_color_hex(0xFF2E55);
+    int R = 22 + (int)(sinf(now * 0.012f) * 4);   // nhip dap
+    int cy = PET_CH / 2 - 6;
+    pet_heart(PET_CW / 2 - EYE_SP / 2 - EYE_W / 2, cy, R, red);
+    pet_heart(PET_CW / 2 + EYE_SP / 2 + EYE_W / 2, cy, R, red);
+}
+
+// Chong mat - 2 vong xoay mau vang (dizzy)
+static void pet_dizzy(uint32_t now) {
+    lv_canvas_fill_bg(petCanvas, lv_color_black(), LV_OPA_COVER);
+    lv_color_t yel = lv_color_hex(0xFFC933);
+    int a = (int)(now * 0.4f) % 360;
+    int cy = PET_CH / 2;
+    int cxL = PET_CW / 2 - EYE_SP / 2 - EYE_W / 2;
+    int cxR = PET_CW / 2 + EYE_SP / 2 + EYE_W / 2;
+    pet_arc(cxL, cy, 30, a, a + 290, 11, yel);
+    pet_arc(cxR, cy, 30, a + 180, a + 470, 11, yel);
 }
 
 static void build_pet(lv_obj_t *scr) {
@@ -1096,7 +1141,8 @@ static void build_pet(lv_obj_t *scr) {
 
     pex = pexN = pey = peyN = 0; peh = pehN = EYE_H;
     petTWander = petTBlink = petTBlinkOpen = petHappyUntil = petLastFrame = 0;
-    pet_render(false, false);
+    petAct = 0; petActUntil = 0; petTAct = 0;
+    pet_render(0, EYE_H, EYE_H, 0, 0, lv_color_hex(0x33E1FF));
 }
 
 // Goi moi vong loop() -> hoat hinh Vector (chi khi o man Pet)
@@ -1106,27 +1152,72 @@ void ui_fast_tick() {
     if (now - petLastFrame < 40) return;    // ~25fps cho easing muot
     petLastFrame = now;
 
-    if (g_notify.hasNew) { g_notify.hasNew = false; petHappyUntil = now + 2200; }  // tin nhan -> cuoi
+    if (g_notify.hasNew) { g_notify.hasNew = false; petAct = 7; petActUntil = now + 2800; }  // tin nhan -> mat trai tim
 
-    // Mat tu di lang thang (wander)
-    if (now >= petTWander) {
-        pexN = (float)random(-36, 37);
-        peyN = (float)random(-22, 23);
-        petTWander = now + 800 + (uint32_t)random(0, 2200);
+    // ---- Dao dien: khi dang idle, thinh thoang random 1 tro cho vui ----
+    if (petAct == 0 && now >= petTAct) {
+        int r = (int)random(0, 100);
+        if      (r < 24) { petAct = 1; petActUntil = now + 2200; }                 // cuoi mim
+        else if (r < 40) { petAct = 2; petActUntil = now + 2400; }                 // cuoi ha ha (nhun)
+        else if (r < 55) { petAct = 3; petActUntil = now + 1500; }                 // boi roi (lac)
+        else if (r < 67) { petAct = 4; petActUntil = now + 260; petWinkEye = (int)random(0,2); } // nhay 1 mat
+        else if (r < 77) { petAct = 5; petActUntil = now + 1800; }                 // gian du
+        else if (r < 86) { petAct = 7; petActUntil = now + 2600; }                 // mat trai tim (love)
+        else if (r < 93) { petAct = 8; petActUntil = now + 2000; }                 // chong mat (dizzy)
+        else             { petAct = 6; petActUntil = now + 1800;                   // nhin cham 1 ben (to mo)
+                           pexN = (random(0,2) ? 40 : -40); peyN = 0; }
+        petTAct = now + 2600 + (uint32_t)random(0, 3200);   // lan quyet dinh ke tiep
     }
-    // Chop mat
-    if (now >= petTBlink && pehN >= EYE_H) { pehN = 6; petTBlinkOpen = now + 110; }
-    if (pehN < EYE_H && now >= petTBlinkOpen) { pehN = EYE_H; petTBlink = now + 1600 + (uint32_t)random(0, 3600); }
+    if (petAct != 0 && now >= petActUntil) { petAct = 0; }   // het tro -> ve idle
+
+    // ---- Love / dizzy ve rieng, thoat som ----
+    if (petAct == 7) { pet_love(now);  return; }
+    if (petAct == 8) { pet_dizzy(now); return; }
+
+    // ---- Wander + chop mat chi khi idle (tro khac tu lo phan cua no) ----
+    if (petAct == 0 || petAct == 1 || petAct == 5) {
+        if (now >= petTWander) {
+            pexN = (float)random(-36, 37);
+            peyN = (float)random(-22, 23);
+            petTWander = now + 800 + (uint32_t)random(0, 2200);
+        }
+    }
+    // Chop mat (khong chop khi dang nhay/nhun de khoi doi nhau)
+    if (petAct != 2 && petAct != 4) {
+        if (now >= petTBlink && pehN >= EYE_H) { pehN = 6; petTBlinkOpen = now + 110; }
+        if (pehN < EYE_H && now >= petTBlinkOpen) { pehN = EYE_H; petTBlink = now + 1600 + (uint32_t)random(0, 3600); }
+    }
 
     // Easing muot toi dich
     pex += (pexN - pex) * 0.30f;
     pey += (peyN - pey) * 0.30f;
     peh += (pehN - peh) * 0.45f;
 
-    struct tm tm;
-    bool night = wf_get_time(tm) && (tm.tm_hour >= 22 || tm.tm_hour < 6);
-    bool happy = now < petHappyUntil;
-    pet_render(happy, night && !happy);
+    // ---- Tinh tham so + MAU ve theo tro hien tai ----
+    int mood = 0, hlL = (int)(peh + 0.5f), hlR = hlL, dx = 0, dy = 0;
+    lv_color_t col = lv_color_hex(0x33E1FF);                    // cyan mac dinh
+    switch (petAct) {
+        case 1:  mood = 1; col = lv_color_hex(0x4DF08A); break; // cuoi mim -> xanh la
+        case 2:  mood = 1; dy = (int)(sinf(now * 0.028f) * 10); // cuoi ha ha: nhun len xuong -> vang
+                 hlL = hlR = EYE_H; col = lv_color_hex(0xFFD23F); break;
+        case 3:  dx = (int)(sinf(now * 0.045f) * 14);           // boi roi: lac ngang -> tim
+                 col = lv_color_hex(0xB37DFF); break;
+        case 4:  if (petWinkEye == 0) hlL = 6; else hlR = 6;    // nhay 1 mat -> hong
+                 col = lv_color_hex(0xFF8AD1); break;
+        case 5:  mood = 3; col = lv_color_hex(0xFF4D4D); break; // gian du -> do
+        case 6: {                                               // to mo: mat ben nhin to hon -> cam
+                 if (pex > 8)      hlR += 14;
+                 else if (pex < -8) hlL += 14;
+                 col = lv_color_hex(0xFF9F40); break; }
+        default: {
+                 struct tm tm;                                  // dem khuya -> lim dim, xanh mo
+                 if (wf_get_time(tm) && (tm.tm_hour >= 22 || tm.tm_hour < 6)) {
+                     mood = 2; col = lv_color_hex(0x2A7AA8);
+                 }
+                 break; }
+    }
+    if (hlL < 4) hlL = 4;  if (hlR < 4) hlR = 4;
+    pet_render(mood, hlL, hlR, dx, dy, col);
 }
 
 // ============================================================
