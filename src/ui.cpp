@@ -689,7 +689,6 @@ static void key_handler(lv_event_t *e) {
                 wf_save_style();
                 draw_wf_full();
             }
-            else if (key == LV_KEY_ESC) request_screen(SCR_PET);   // C: ve mat Vector
             break;
 
         case SCR_MENU:
@@ -778,9 +777,8 @@ static void key_handler(lv_event_t *e) {
             break;
 
         case SCR_PET:
-            if (key == LV_KEY_DOWN)       request_screen(SCR_WATCH);     // A: vao dong ho
-            else if (key == LV_KEY_ENTER) petHappyUntil = millis() + 1600; // B: vuot ve -> vui
-            else if (key == LV_KEY_ESC)   request_screen(SCR_MENU);      // C: menu
+            if (key == LV_KEY_DOWN || key == LV_KEY_ENTER) petHappyUntil = millis() + 1600; // A/B: vuot ve -> vui
+            else if (key == LV_KEY_ESC) request_screen(SCR_MENU);        // C: quay lai menu
             break;
 
         case SCR_DIAL:
@@ -1041,49 +1039,67 @@ static void build_reply(lv_obj_t *scr) {
 }
 
 // ============================================================
-//  VECTOR - thu cung mat cyan (ve truc tiep)
+//  VECTOR - thu cung mat cyan (LVGL - muot, khong nhap nhay)
 // ============================================================
-static void pet_draw(int mood) {   // 0=neutral 1=blink 2=happy 3=sleepy 4=excited
-    display_fill_rect(20, 40, 200, 164, 0x0000);   // xoa vung mat
-    uint16_t col = 0x07FF;                          // cyan Vector
-    int cxL = 92 + petLookX, cxR = 148 + petLookX;
-    int cy  = 122 + petLookY;
+static lv_obj_t *petEyeL = nullptr, *petEyeR = nullptr, *petZ = nullptr;
 
-    if (mood == 1) {                    // BLINK: vach mong
-        display_fill_round_rect(cxL - 24, cy - 5, 48, 10, 5, col);
-        display_fill_round_rect(cxR - 24, cy - 5, 48, 10, 5, col);
-    } else if (mood == 2) {             // HAPPY: vom cong len
-        display_fill_round_rect(cxL - 24, cy - 22, 48, 44, 22, col);
-        display_fill_round_rect(cxR - 24, cy - 22, 48, 44, 22, col);
-        display_fill_rect(cxL - 26, cy + 2, 52, 28, 0x0000);   // cat nua duoi -> hinh ^
-        display_fill_rect(cxR - 26, cy + 2, 52, 28, 0x0000);
-    } else if (mood == 3) {             // SLEEPY: mat lim + zzz
-        display_fill_round_rect(cxL - 24, cy + 8, 48, 12, 6, col);
-        display_fill_round_rect(cxR - 24, cy + 8, 48, 12, 6, col);
-        display_text(166, 60, "z", col, 0x0000);
-        display_text(184, 46, "z", col, 0x0000);
-    } else {                            // NEUTRAL(0) / EXCITED(4)
-        int w = (mood == 4) ? 54 : 48;
-        int h = (mood == 4) ? 78 : 66;
-        display_fill_round_rect(cxL - w / 2, cy - h / 2, w, h, 16, col);
-        display_fill_round_rect(cxR - w / 2, cy - h / 2, w, h, 16, col);
+// Cap nhat kich thuoc/vi tri 1 mat
+static void pet_set_eye(lv_obj_t *e, int cx, int cy, int w, int h, int r) {
+    lv_obj_set_size(e, w, h);
+    lv_obj_set_style_radius(e, r, 0);
+    lv_obj_set_pos(e, cx - w / 2, cy - h / 2);
+}
+
+static void pet_apply(int mood) {   // 0=neutral 1=blink 2=happy 3=sleepy 4=excited
+    int cxL = 92 + petLookX, cxR = 148 + petLookX, cy = 122 + petLookY;
+    int w, h, r, dy = 0;
+    switch (mood) {
+        case 1: w = 48; h = 10; r = 5;  break;                 // BLINK
+        case 2: w = 48; h = 26; r = 13; dy = 4;  break;        // HAPPY (nheo cuoi)
+        case 3: w = 48; h = 12; r = 6;  dy = 10; break;        // SLEEPY (lim dim)
+        case 4: w = 54; h = 80; r = 18; break;                 // EXCITED (mat to)
+        default: w = 48; h = 66; r = 16; break;                // NEUTRAL
+    }
+    pet_set_eye(petEyeL, cxL, cy + dy, w, h, r);
+    pet_set_eye(petEyeR, cxR, cy + dy, w, h, r);
+    if (petZ) {
+        if (mood == 3) lv_obj_clear_flag(petZ, LV_OBJ_FLAG_HIDDEN);
+        else           lv_obj_add_flag(petZ, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
 static void build_pet(lv_obj_t *scr) {
-    (void)scr;
-    display_set_raw(true);
-    display_fill(0x0000);
+    lv_obj_set_style_bg_color(scr, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
+
+    lv_color_t cyan = lv_color_hex(0x00E5FF);
+    petEyeL = lv_obj_create(scr);
+    petEyeR = lv_obj_create(scr);
+    for (lv_obj_t *e : {petEyeL, petEyeR}) {
+        lv_obj_clear_flag(e, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_set_style_bg_color(e, cyan, 0);
+        lv_obj_set_style_bg_opa(e, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(e, 0, 0);
+        lv_obj_set_style_pad_all(e, 0, 0);
+    }
+    petZ = lv_label_create(scr);
+    lv_obj_set_style_text_font(petZ, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(petZ, cyan, 0);
+    lv_label_set_text(petZ, "z z");
+    lv_obj_align(petZ, LV_ALIGN_TOP_RIGHT, -30, 40);
+    lv_obj_add_flag(petZ, LV_OBJ_FLAG_HIDDEN);
+
     petLastFrame = 0; petNextBlink = 0; petNextLook = 0;
     petBlinking = false; petLookX = petLookY = 0;
     petHappyUntil = petExcitedUntil = 0;
+    pet_apply(0);
 }
 
 // Goi moi vong loop() -> hoat hinh Vector (chi lam viec khi dang o man Pet)
 void ui_fast_tick() {
-    if (g_cur != SCR_PET) return;
+    if (g_cur != SCR_PET || !petEyeL) return;
     uint32_t now = millis();
-    if (now - petLastFrame < 60) return;   // ~16fps
+    if (now - petLastFrame < 70) return;   // ~14fps
     petLastFrame = now;
 
     if (!petBlinking && now >= petNextBlink) { petBlinking = true; petBlinkStart = now; }
@@ -1105,7 +1121,7 @@ void ui_fast_tick() {
     else if (night)               mood = 3;
     else if (petBlinking)         mood = 1;
     else                          mood = 0;
-    pet_draw(mood);
+    pet_apply(mood);
 }
 
 // ============================================================
@@ -1114,7 +1130,7 @@ void ui_fast_tick() {
 static void show_screen(Screen s) {
     // doc don dep man hinh cu
     lv_obj_t *old = g_scr;
-    if (g_cur == SCR_WATCH || g_cur == SCR_QR || g_cur == SCR_PET) display_set_raw(false);  // het man ve-raw
+    if (g_cur == SCR_WATCH || g_cur == SCR_QR) display_set_raw(false);  // het man ve-raw
     if (g_cur == SCR_REMOTE || g_cur == SCR_CAMERA) { hid_stop(); ble_init(); } // tat HID, bat lai BLE thuong
 
     // reset con tro label
@@ -1122,6 +1138,7 @@ static void show_screen(Screen s) {
     lblTmrTime = lblTmrMode = nullptr;
     lblDialInfo = nullptr;
     lblReplyInfo = nullptr;
+    petEyeL = petEyeR = petZ = nullptr;
     navArrow = navDist = navStreet = navEta = nullptr;
     navLine = navDot = nullptr;
     lblNApp = lblNTitle = lblNText = nullptr;
@@ -1198,7 +1215,7 @@ void ui_init(lv_group_t *group) {
         if (n >= 7) { g_dateR = wf.read(); g_dateG = wf.read(); g_dateB = wf.read(); }
         wf.close();
     }
-    show_screen(SCR_PET);   // man chinh = mat Vector
+    show_screen(SCR_WATCH);   // man chinh = mat dong ho
 }
 
 void ui_reload_wallpaper() {
@@ -1209,7 +1226,7 @@ void ui_reload_wallpaper() {
 }
 
 bool ui_can_sleep() {
-    return g_cur == SCR_WATCH || g_cur == SCR_PET;   // ngu o mat dong ho / Vector
+    return g_cur == SCR_WATCH;   // chi ngu khi dang o mat dong ho
 }
 
 void ui_tick() {
@@ -1235,9 +1252,8 @@ void ui_tick() {
         if (g_cur == SCR_REPLY) request_screen(SCR_REPLY);
     }
 
-    // Co thong bao moi -> tu mo man Thong bao (tu mat dong ho hoac Vector, khong phai luc co cuoc goi)
-    if (g_notify.hasNew && (g_cur == SCR_WATCH || g_cur == SCR_PET) && !g_call.ringing)
-        request_screen(SCR_NOTIFY);
+    // Co thong bao moi -> tu mo man Thong bao (khi dang o mat dong ho, khong phai luc co cuoc goi)
+    if (g_notify.hasNew && g_cur == SCR_WATCH && !g_call.ringing) request_screen(SCR_NOTIFY);
 
     // Doi mau chu (tu app) -> ve lai gio ngay neu dang o mat dong ho
     if (g_colorChanged) {
