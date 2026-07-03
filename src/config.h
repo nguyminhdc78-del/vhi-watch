@@ -68,7 +68,7 @@
 
 // ---------------- Deep sleep ----------------
 // Khong bam nut trong bao lau (ms) thi tat man hinh (chi khi dang o mat dong ho)
-#define SLEEP_TIMEOUT_MS    60000
+#define SLEEP_TIMEOUT_MS    5000
 
 // ---------------- LVGL ----------------
 #define LVGL_TICK_MS        5
