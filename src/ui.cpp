@@ -86,11 +86,71 @@ static uint32_t petActUntil = 0, petTAct = 0;
 // Menu chon animation (nut A) + khoa 1 tro chon tay
 static bool     petMenuOpen = false, petLock = false;
 static int      petMenuSel = 0;
-// Danh sach animation chon duoc (ten co dau + ma tro; -1 = tu dong)
-static const char *PET_ANIM_NAME[] = { "Đọc báo", "Ăn phở", "Cười", "Trái tim",
-                                       "Chóng mặt", "Giận dữ", "Nháy mắt", "Tự động" };
-static const int   PET_ANIM_ACT[]  = { 9, 10, 2, 7, 8, 5, 4, -1 };
-#define PET_ANIM_N 8
+// Choc gheo: bam nut A (LV_KEY_DOWN) don dap -> buc doc len -> gian
+static int      petPokeCnt = 0;
+static uint32_t petLastPoke = 0;
+// ============================================================
+//  BANG DANG KY TRO (registry)
+//  Them 1 tro = them 1 DONG o day (+ viet ham ve neu la tro ve rieng).
+//  Menu / random / dispatch deu TU DOC tu bang -> khoi sua nhieu cho.
+// ============================================================
+typedef void (*PetRenderFn)(uint32_t now);
+struct PetTrick {
+    const char *name;    // ten trong menu (nullptr = chi chay random, khong vao menu)
+    int         act;     // ma tro (petAct)
+    PetRenderFn render;  // ham ve rieng (nullptr = dung bo ve mat mac dinh theo 'mood')
+    uint16_t    dur;     // thoi luong (ms)
+    uint8_t     weight;  // trong so random (0 = khong tu chay, chi chon tay)
+    uint8_t     night;   // 1 = uu tien luc dem (22h-6h)
+};
+// Ham ve rieng dinh nghia phia duoi -> khai bao truoc de bang tham chieu duoc
+static void pet_read(uint32_t), pet_pho(uint32_t), pet_love(uint32_t), pet_dizzy(uint32_t);
+static void pet_yawn(uint32_t), pet_sparkle(uint32_t), pet_confused(uint32_t);
+
+static const PetTrick PET_TRICKS[] = {
+  //  ten           act  ham ve         dur    wt  dem
+  { "Đọc báo",      9,   pet_read,     10300,  3,  0 },
+  { "Ăn phở",       10,  pet_pho,       4350,  5,  0 },
+  { "Cười",         2,   nullptr,       2400, 12,  0 },
+  { "Trái tim",     7,   pet_love,      2600,  9,  0 },
+  { "Chóng mặt",    8,   pet_dizzy,     2000,  8,  0 },
+  { "Giận dữ",      5,   nullptr,       1800,  5,  0 },
+  { "Nháy mắt",     4,   nullptr,        260,  8,  0 },
+  { "Ngáp",         11,  pet_yawn,      3200,  9,  1 },
+  { "Lấp lánh",     12,  pet_sparkle,   2600, 11,  0 },
+  { "Ngơ ngác",     13,  pet_confused,  2600, 11,  0 },
+  { nullptr,        1,   nullptr,       2200, 16,  0 },   // cuoi mim (chi random)
+  { nullptr,        3,   nullptr,       1500,  6,  0 },   // boi roi (chi random)
+  { nullptr,        6,   nullptr,       1800,  3,  0 },   // to mo 1 ben (chi random)
+};
+#define PET_TRICK_CNT ((int)(sizeof(PET_TRICKS) / sizeof(PET_TRICKS[0])))
+
+static const PetTrick* pet_trick_of(int act) {
+    for (int i = 0; i < PET_TRICK_CNT; i++) if (PET_TRICKS[i].act == act) return &PET_TRICKS[i];
+    return nullptr;
+}
+// Menu = cac tro co ten (theo thu tu bang) + "Tự động" o cuoi
+static int pet_menu_n() {
+    int n = 1;                                          // +1 cho "Tự động"
+    for (int i = 0; i < PET_TRICK_CNT; i++) if (PET_TRICKS[i].name) n++;
+    return n;
+}
+static const char* pet_menu_name(int idx) {
+    int k = 0;
+    for (int i = 0; i < PET_TRICK_CNT; i++) {
+        if (!PET_TRICKS[i].name) continue;
+        if (k++ == idx) return PET_TRICKS[i].name;
+    }
+    return "Tự động";
+}
+static int pet_menu_act(int idx) {                      // -1 = tu dong
+    int k = 0;
+    for (int i = 0; i < PET_TRICK_CNT; i++) {
+        if (!PET_TRICKS[i].name) continue;
+        if (k++ == idx) return PET_TRICKS[i].act;
+    }
+    return -1;
+}
 
 // ---------- tien ich ----------
 static lv_obj_t* make_root() {
@@ -793,9 +853,9 @@ static void key_handler(lv_event_t *e) {
 
         case SCR_PET:
             if (petMenuOpen) {                                  // dang mo menu chon animation
-                if (key == LV_KEY_DOWN)       petMenuSel = (petMenuSel + 1) % PET_ANIM_N;   // B: xuong
+                if (key == LV_KEY_DOWN)       petMenuSel = (petMenuSel + 1) % pet_menu_n();   // B: xuong
                 else if (key == LV_KEY_ENTER) {                 // A: chon
-                    int act = PET_ANIM_ACT[petMenuSel];
+                    int act = pet_menu_act(petMenuSel);
                     if (act < 0) { petLock = false; petAct = 0; petTAct = millis() + 600; } // Tu dong
                     else         { petLock = true;  petAct = act; petActUntil = millis() + 3600000;
                                    if (act == 6 || act == 5 || act == 1) { pexN = 0; peyN = 0; } }
@@ -804,7 +864,15 @@ static void key_handler(lv_event_t *e) {
                 else if (key == LV_KEY_ESC)   petMenuOpen = false;        // C: dong menu
             } else {
                 if (key == LV_KEY_ENTER)      { petMenuOpen = true; petMenuSel = 0; } // A: mo menu
-                else if (key == LV_KEY_DOWN)  { petAct = 2; petActUntil = millis() + 2600; petLock = false; } // B: cuoi nhanh
+                else if (key == LV_KEY_DOWN)  {                          // A: choc gheo -> buc -> gian
+                    uint32_t nowp = millis();
+                    petPokeCnt = (nowp - petLastPoke < 1500) ? petPokeCnt + 1 : 1;   // choc don dap trong 1.5s
+                    petLastPoke = nowp;
+                    petLock = false;
+                    if (petPokeCnt >= 4)      { petAct = 5;  petActUntil = nowp + 2400; petPokeCnt = 0; } // gian du
+                    else if (petPokeCnt == 3) { petAct = 3;  petActUntil = nowp + 1300; }                 // lac dau kho chiu
+                    else                      { petAct = 13; petActUntil = nowp + 1100; }                 // giat minh "?"
+                }
                 else if (key == LV_KEY_ESC)   request_screen(SCR_MENU);   // C: quay lai menu
             }
             break;
@@ -1280,6 +1348,141 @@ static void pet_pho(uint32_t now) {
     lv_canvas_draw_img(petCanvas, x, y, img, &idsc);
 }
 
+// Tia sang 4 canh (ngoi sao lap lanh) - 2 hinh thoi long nhau
+static void pet_spark(int cx, int cy, int r, lv_color_t c) {
+    if (r < 3) r = 3;
+    int t = r / 3 + 1;
+    pet_quad(cx, cy - r, cx + t, cy, cx, cy + r, cx - t, cy, c);   // thoi doc
+    pet_quad(cx - r, cy, cx, cy - t, cx + r, cy, cx, cy + t, c);   // thoi ngang
+}
+
+// ============================================================
+//  Bieu cam moi (ve canvas): Ngap - Mat lap lanh - Ngo ngac "?"
+// ============================================================
+
+// NGAP: mat lim dim -> nham tit (2 vom cong) khi ha mieng to; mieng "O" phong ra +
+// luoi hong, nuoc mat ri khoe ngoai, roi "z z z" bay len. Nhip ngap muot theo nua sin.
+static void pet_yawn(uint32_t now) {
+    lv_canvas_fill_bg(petCanvas, lv_color_black(), LV_OPA_COVER);
+    lv_color_t cyan = lv_color_hex(0x33E1FF);
+    lv_color_t pink = lv_color_hex(0xFF7AA0);
+    int cx = PET_CW / 2, cy = PET_CH / 2;
+    uint32_t T = 2900, t = now % T;
+
+    float openv = (t < 1700) ? sinf((float)t / 1700.0f * 3.14159f) : 0.0f;   // do ha mieng 0..1
+    int tiltY = -(int)(openv * 6);                          // hoi ngua dau
+
+    int ew = EYE_W;
+    int xL = cx - EYE_SP / 2 - ew;
+    int xR = cx + EYE_SP / 2;
+    int eyeCY = cy - 10 + tiltY;
+
+    if (openv < 0.5f) {                                     // mat lim dim (mi tren xech)
+        int eh = (int)(EYE_H * (0.66f - 0.22f * openv));
+        int yT = eyeCY - eh / 2;
+        pet_rrect(xL, yT, ew, eh, EYE_R, cyan);
+        pet_rrect(xR, yT, ew, eh, EYE_R, cyan);
+        pet_tri(xL, yT - 1, xL + ew, yT - 1, xL, yT + eh / 2, lv_color_black());
+        pet_tri(xR, yT - 1, xR + ew, yT - 1, xR + ew, yT + eh / 2, lv_color_black());
+    } else {                                               // nham tit: 2 vom cong ^^
+        int r = ew / 2;
+        pet_arc(xL + ew / 2, eyeCY + 6, r, 200, 340, 7, cyan);
+        pet_arc(xR + ew / 2, eyeCY + 6, r, 200, 340, 7, cyan);
+    }
+
+    if (openv > 0.55f) {                                   // nuoc mat khoe ngoai
+        pet_circle(xL - 5, eyeCY + 6, 3, cyan);
+        pet_circle(xR + ew + 5, eyeCY + 6, 3, cyan);
+    }
+
+    if (openv > 0.05f) {                                   // mieng "O" phong ra
+        int mw = 26 + (int)(openv * 14);
+        int mh = (int)(openv * 60);
+        int my = cy + 42 + tiltY;
+        int rr = (mw < mh ? mw : mh) / 2;
+        pet_rrect(cx - mw / 2, my - mh / 2, mw, mh, rr, cyan);
+        int iw = mw - 8, ih = mh - 8;
+        if (iw > 4 && ih > 4) {
+            pet_rrect(cx - iw / 2, my - ih / 2, iw, ih, (iw < ih ? iw : ih) / 2, lv_color_black());
+            if (mh > 30) {                                 // luoi hong
+                int tw = iw - 8;
+                pet_rrect(cx - tw / 2, my + ih / 2 - 11, tw, 9, 4, pink);
+            }
+        }
+    }
+
+    if (t > 1500) {                                        // "z z z" bay len (buon ngu)
+        lv_draw_label_dsc_t d; lv_draw_label_dsc_init(&d);
+        d.color = cyan; d.font = &lv_font_montserrat_16;
+        int drift = ((t - 1500) / 90) % 22;
+        for (int i = 0; i < 3; i++)
+            lv_canvas_draw_text(petCanvas, cx + 34 + i * 12, cy - 30 - i * 16 - drift, 24, &d, "z");
+    }
+}
+
+// MAT LAP LANH: mat to sang, ngoi sao trang lap lanh trong mat (co gian = twinkle),
+// vai tia sang nhieu mau bay lo lung quanh dau. Ca mat nhun theo nhip phan khich.
+static void pet_sparkle(uint32_t now) {
+    lv_canvas_fill_bg(petCanvas, lv_color_black(), LV_OPA_COVER);
+    lv_color_t cyan  = lv_color_hex(0x33E1FF);
+    lv_color_t white = lv_color_hex(0xFFFFFF);
+    int cx = PET_CW / 2, cy = PET_CH / 2;
+
+    int bob = (int)(sinf(now * 0.013f) * 4);
+    int ew = EYE_W, eh = EYE_H;
+    int xL = cx - EYE_SP / 2 - ew;
+    int xR = cx + EYE_SP / 2;
+    int eyeCY = cy - 2 + bob;
+
+    pet_rrect(xL, eyeCY - eh / 2, ew, eh, EYE_R, cyan);     // mat to mo
+    pet_rrect(xR, eyeCY - eh / 2, ew, eh, EYE_R, cyan);
+
+    float tw = 0.6f + 0.4f * sinf(now * 0.02f);            // twinkle
+    int sr = 10 + (int)(tw * 12);
+    pet_spark(xL + ew / 2, eyeCY, sr, white);
+    pet_spark(xR + ew / 2, eyeCY, sr, white);
+    pet_circle(xL + ew / 2 + 15, eyeCY - 16, 4, white);     // dom sang phu
+    pet_circle(xR + ew / 2 + 15, eyeCY - 16, 4, white);
+
+    static const uint32_t sc[5] = {0xFFFFFF, 0x33E1FF, 0xFFD23F, 0xFF7AD1, 0x8AF0A0};
+    static const int bx[5] = { 22, PET_CW - 22, 60, PET_CW - 60, PET_CW / 2 };
+    static const int by[5] = { 40, 40, 14, 14, 6 };
+    float base = now * 0.005f;
+    for (int i = 0; i < 5; i++) {
+        float k = 0.5f + 0.5f * sinf(base * 2.0f + i * 1.7f);
+        int dy = (int)(sinf(base + i) * 4);
+        pet_spark(bx[i], by[i] + dy, 3 + (int)(k * 7), lv_color_hex(sc[i]));
+    }
+}
+
+// NGO NGAC "?": dau hoi vang to nhun tren dau, mat le (1 to 1 nheo) + liec qua lai,
+// dau hoi nhun len xuong. Kieu "ha? gi vay?".
+static void pet_confused(uint32_t now) {
+    lv_canvas_fill_bg(petCanvas, lv_color_black(), LV_OPA_COVER);
+    lv_color_t cyan   = lv_color_hex(0x33E1FF);
+    lv_color_t yellow = lv_color_hex(0xFFD23F);
+    int cx = PET_CW / 2, cy = PET_CH / 2;
+
+    float g  = sinf(now * 0.004f);                 // liec cham qua lai
+    int gx   = (int)(g * 10);
+    int tilt = (int)(sinf(now * 0.0022f) * 6);     // nghieng dau
+
+    int ew = EYE_W;
+    int xL = cx - EYE_SP / 2 - ew + gx;
+    int xR = cx + EYE_SP / 2 + gx;
+    int eyeCY = cy + 8;
+    int ehL = EYE_H;                               // mat trai to (to mo)
+    int ehR = (int)(EYE_H * 0.6f);                // mat phai nheo (kho hieu)
+    pet_rrect(xL, eyeCY - ehL / 2 - tilt, ew, ehL, EYE_R, cyan);
+    pet_rrect(xR, eyeCY - ehR / 2 + tilt, ew, ehR, EYE_R, cyan);
+
+    int qx = cx + 46 + (int)(g * 6);              // "?" vang, goc tren-phai, nhun
+    int qy = 30 + (int)(sinf(now * 0.006f) * 6);
+    lv_draw_label_dsc_t d; lv_draw_label_dsc_init(&d);
+    d.color = yellow; d.font = &lv_font_montserrat_28; d.align = LV_TEXT_ALIGN_CENTER;
+    lv_canvas_draw_text(petCanvas, qx - 24, qy, 48, &d, "?");
+}
+
 // Menu chon animation - ve trang len canvas, dieu khien bang nut A/B/C
 static void pet_menu_draw() {
     lv_canvas_fill_bg(petCanvas, lv_color_hex(0x0A0F1E), LV_OPA_COVER);
@@ -1288,8 +1491,8 @@ static void pet_menu_draw() {
     t.align = LV_TEXT_ALIGN_CENTER;
     lv_canvas_draw_text(petCanvas, 0, 6, PET_CW, &t, "Chọn animation");
 
-    int y0 = 38, rh = 17;
-    for (int i = 0; i < PET_ANIM_N; i++) {
+    int y0 = 30, rh = 16;
+    for (int i = 0; i < pet_menu_n(); i++) {
         int y = y0 + i * rh;
         lv_draw_label_dsc_t d; lv_draw_label_dsc_init(&d);
         d.font = &vn_font_16;
@@ -1299,7 +1502,7 @@ static void pet_menu_draw() {
         } else {
             d.color = lv_color_hex(0x8FB7C7);
         }
-        lv_canvas_draw_text(petCanvas, 26, y, PET_CW - 44, &d, PET_ANIM_NAME[i]);
+        lv_canvas_draw_text(petCanvas, 26, y, PET_CW - 44, &d, pet_menu_name(i));
     }
 }
 
@@ -1330,6 +1533,7 @@ static void build_pet(lv_obj_t *scr) {
     petTWander = petTBlink = petTBlinkOpen = petHappyUntil = petLastFrame = 0;
     petAct = 0; petActUntil = 0; petTAct = 0;
     petMenuOpen = false; petLock = false; petMenuSel = 0;
+    petPokeCnt = 0; petLastPoke = 0;
     pet_render(0, EYE_H, EYE_H, 0, 0, lv_color_hex(0x33E1FF));
 }
 
@@ -1348,26 +1552,38 @@ void ui_fast_tick() {
     // ---- Dao dien tu dong (chi khi KHONG khoa tro chon tay) ----
     if (!petLock) {
         if (petAct == 0 && now >= petTAct) {
-            int r = (int)random(0, 100);
-            if      (r < 24) { petAct = 1; petActUntil = now + 2200; }                 // cuoi mim
-            else if (r < 40) { petAct = 2; petActUntil = now + 2400; }                 // cuoi ha ha (nhun)
-            else if (r < 55) { petAct = 3; petActUntil = now + 1500; }                 // boi roi (lac)
-            else if (r < 67) { petAct = 4; petActUntil = now + 260; petWinkEye = (int)random(0,2); } // nhay 1 mat
-            else if (r < 77) { petAct = 5; petActUntil = now + 1800; }                 // gian du
-            else if (r < 86) { petAct = 7; petActUntil = now + 2600; }                 // mat trai tim (love)
-            else if (r < 93) { petAct = 8; petActUntil = now + 2000; }                 // chong mat (dizzy)
-            else             { petAct = 6; petActUntil = now + 1800;                   // nhin cham 1 ben (to mo)
-                               pexN = (random(0,2) ? 40 : -40); peyN = 0; }
+            struct tm tmv;
+            bool night = wf_get_time(tmv) && (tmv.tm_hour >= 22 || tmv.tm_hour < 6);
+            // Chon tro theo trong so (tro co co 'dem' duoc nhan 4 luc ban dem)
+            int total = 0;
+            for (int i = 0; i < PET_TRICK_CNT; i++) {
+                int w = PET_TRICKS[i].weight;
+                if (w) total += (night && PET_TRICKS[i].night) ? w * 4 : w;
+            }
+            int r = (int)random(0, total);
+            const PetTrick *pick = nullptr;
+            for (int i = 0; i < PET_TRICK_CNT; i++) {
+                int w = PET_TRICKS[i].weight;
+                if (!w) continue;
+                if (night && PET_TRICKS[i].night) w *= 4;
+                if (r < w) { pick = &PET_TRICKS[i]; break; }
+                r -= w;
+            }
+            if (pick) {
+                petAct = pick->act;
+                petActUntil = now + pick->dur;
+                if (petAct == 4) petWinkEye = (int)random(0, 2);              // nhay mat: chon mat
+                if (petAct == 6) { pexN = (random(0,2) ? 40 : -40); peyN = 0; } // to mo: nhin 1 ben
+            }
             petTAct = now + 2600 + (uint32_t)random(0, 3200);   // lan quyet dinh ke tiep
         }
         if (petAct != 0 && now >= petActUntil) { petAct = 0; }   // het tro -> ve idle
     }
 
     // ---- Cac tro ve rieng, thoat som ----
-    if (petAct == 7)  { pet_love(now);  return; }   // trai tim
-    if (petAct == 8)  { pet_dizzy(now); return; }   // chong mat
-    if (petAct == 9)  { pet_read(now);  return; }   // doc bao
-    if (petAct == 10) { pet_pho(now);   return; }   // an pho
+    // Tro co ham ve rieng (love/dizzy/read/pho/yawn/sparkle/confused) -> ve va thoat som
+    const PetTrick *cur = pet_trick_of(petAct);
+    if (cur && cur->render) { cur->render(now); return; }
 
     // ---- Wander + chop mat chi khi idle (tro khac tu lo phan cua no) ----
     if (petAct == 0 || petAct == 1 || petAct == 5) {
