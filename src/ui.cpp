@@ -76,6 +76,8 @@ static uint32_t petNextBlink = 0, petBlinkStart = 0, petNextLook = 0;
 static bool     petBlinking = false;
 static int      petLookX = 0, petLookY = 0;
 static uint32_t petHappyUntil = 0, petExcitedUntil = 0, petLastFrame = 0;
+static int      petIdleMood = 0;          // bieu cam tu doi ngau nhien
+static uint32_t petIdleUntil = 0;
 
 // ---------- tien ich ----------
 static lv_obj_t* make_root() {
@@ -1056,34 +1058,48 @@ static void pet_arc(int cx, int cy, int r, int a0, int a1, int width, lv_color_t
     d.color = col; d.width = width; d.rounded = 1;
     lv_canvas_draw_arc(petCanvas, cx, cy, r, a0, a1, &d);
 }
+// Mat tron day + dom sang cho de thuong
+static void pet_eye(int cx, int cy, int w, int h, int r, lv_color_t col) {
+    pet_eye_rect(cx, cy, w, h, r, col);
+    lv_draw_rect_dsc_t d; lv_draw_rect_dsc_init(&d);
+    d.bg_color = lv_color_white(); d.bg_opa = LV_OPA_COVER; d.radius = LV_RADIUS_CIRCLE;
+    int s = w / 3;
+    lv_canvas_draw_rect(petCanvas, cx - w / 5 - s / 2, cy - h / 4 - s / 2, s, s, &d);
+}
 
-static void pet_apply(int mood) {   // 0=neutral 1=blink 2=happy 3=sleepy 4=excited
+static void pet_apply(int mood) {  // 0=neutral 1=blink 2=happy 3=sleepy 4=excited 5=content 6=surprised 7=wink
     if (!petCanvas) return;
     lv_canvas_fill_bg(petCanvas, lv_color_black(), LV_OPA_COVER);
     lv_color_t col = lv_color_hex(0x2FE6FF);           // cyan Vector
     int cx = PET_CW / 2 + petLookX, cy = PET_CH / 2 + petLookY;
-    int exL = cx - 34, exR = cx + 34, ey = cy - 22, my = cy + 40;
+    int exL = cx - 36, exR = cx + 36, ey = cy - 20, my = cy + 42;
 
-    if (mood == 1) {                        // BLINK: mat vach + cuoi
-        pet_eye_rect(exL, ey, 40, 10, 5, col);
-        pet_eye_rect(exR, ey, 40, 10, 5, col);
-        pet_arc(cx, my, 22, 30, 150, 7, col);
-    } else if (mood == 2) {                 // HAPPY: mat vom ^ ^ + cuoi
-        pet_arc(exL, ey + 12, 22, 200, 340, 8, col);
-        pet_arc(exR, ey + 12, 22, 200, 340, 8, col);
-        pet_arc(cx, my, 24, 25, 155, 8, col);
-    } else if (mood == 3) {                 // SLEEPY: mat lim + mieng nho
-        pet_eye_rect(exL, ey + 14, 40, 8, 4, col);
-        pet_eye_rect(exR, ey + 14, 40, 8, 4, col);
-        pet_arc(cx, my, 16, 40, 140, 5, col);
-    } else if (mood == 4) {                 // EXCITED: mat to + mieng mo
-        pet_eye_rect(exL, ey, 44, 62, 16, col);
-        pet_eye_rect(exR, ey, 44, 62, 16, col);
-        pet_eye_rect(cx, my + 6, 34, 28, 14, col);
-    } else {                                // NEUTRAL: mat rect + cuoi
-        pet_eye_rect(exL, ey, 40, 56, 14, col);
-        pet_eye_rect(exR, ey, 40, 56, 14, col);
-        pet_arc(cx, my, 22, 30, 150, 7, col);
+    switch (mood) {
+        case 1:  // BLINK
+            pet_eye_rect(exL, ey, 44, 10, 5, col); pet_eye_rect(exR, ey, 44, 10, 5, col);
+            pet_arc(cx, my, 22, 30, 150, 7, col); break;
+        case 2:  // HAPPY: mat vom ^ ^ + cuoi
+            pet_arc(exL, ey + 12, 25, 200, 340, 9, col); pet_arc(exR, ey + 12, 25, 200, 340, 9, col);
+            pet_arc(cx, my, 26, 22, 158, 9, col); break;
+        case 3:  // SLEEPY
+            pet_eye_rect(exL, ey + 14, 44, 8, 4, col); pet_eye_rect(exR, ey + 14, 44, 8, 4, col);
+            pet_arc(cx, my, 16, 40, 140, 5, col); break;
+        case 4:  // EXCITED: mat to + mieng mo
+            pet_eye(exL, ey, 48, 66, 24, col); pet_eye(exR, ey, 48, 66, 24, col);
+            pet_eye_rect(cx, my + 6, 36, 30, 15, col); break;
+        case 5:  // CONTENT: nheo + cuoi to
+            pet_eye_rect(exL, ey + 6, 44, 20, 10, col); pet_eye_rect(exR, ey + 6, 44, 20, 10, col);
+            pet_arc(cx, my, 28, 18, 162, 9, col); break;
+        case 6:  // SURPRISED: mat tron to + mieng o
+            pet_eye(exL, ey, 52, 58, 26, col); pet_eye(exR, ey, 52, 58, 26, col);
+            pet_eye_rect(cx, my + 2, 22, 24, 12, col); break;
+        case 7:  // WINK: 1 mat nham ^, 1 mat mo
+            pet_arc(exL, ey + 12, 25, 200, 340, 9, col);
+            pet_eye(exR, ey, 46, 62, 23, col);
+            pet_arc(cx, my, 24, 24, 156, 8, col); break;
+        default: // NEUTRAL: mat tron + cuoi
+            pet_eye(exL, ey, 46, 62, 23, col); pet_eye(exR, ey, 46, 62, 23, col);
+            pet_arc(cx, my, 22, 30, 150, 7, col); break;
     }
     if (petZ) {
         if (mood == 3) lv_obj_clear_flag(petZ, LV_OBJ_FLAG_HIDDEN);
@@ -1131,6 +1147,16 @@ void ui_fast_tick() {
         petLookY = (int)random(-8, 9);
         petNextLook = now + 1400 + (uint32_t)random(0, 3000);
     }
+    // Tu doi bieu cam ngau nhien cho sinh dong
+    if (now >= petIdleUntil) {
+        int r = (int)random(0, 100);
+        if      (r < 34) petIdleMood = 0;   // binh thuong
+        else if (r < 58) petIdleMood = 2;   // vui ^^
+        else if (r < 73) petIdleMood = 5;   // nheo cuoi
+        else if (r < 86) petIdleMood = 6;   // ngac nhien
+        else             petIdleMood = 7;   // nhay mat
+        petIdleUntil = now + 1600 + (uint32_t)random(0, 2600);
+    }
 
     struct tm tm;
     bool night = wf_get_time(tm) && (tm.tm_hour >= 22 || tm.tm_hour < 6);
@@ -1139,7 +1165,7 @@ void ui_fast_tick() {
     else if (now < petHappyUntil) mood = 2;
     else if (night)               mood = 3;
     else if (petBlinking)         mood = 1;
-    else                          mood = 0;
+    else                          mood = petIdleMood;
     pet_apply(mood);
 }
 
