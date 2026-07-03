@@ -7,6 +7,9 @@ void ui_init(lv_group_t *group);
 // Goi dinh ky (vd 200ms) de cap nhat dong ho / du lieu nav
 void ui_tick();
 
+// Goi moi vong loop() (nhanh) - hoat hinh Vector
+void ui_fast_tick();
+
 // Goi khi wallpaper duoc cap nhat tu web (UI nap lai anh nen)
 void ui_reload_wallpaper();
 

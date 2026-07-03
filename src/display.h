@@ -24,3 +24,4 @@ void display_draw_line(int x0, int y0, int x1, int y1, uint16_t color);
 void display_draw_wide_line(int x0, int y0, int x1, int y1, int w, uint16_t color);
 void display_draw_circle(int x, int y, int r, uint16_t color);
 void display_fill_circle(int x, int y, int r, uint16_t color);
+void display_fill_round_rect(int x, int y, int w, int h, int r, uint16_t color);

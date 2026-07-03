@@ -159,6 +159,10 @@ void display_fill_circle(int x, int y, int r, uint16_t color) {
     lcd.fillCircle(x, y, r, color);
 }
 
+void display_fill_round_rect(int x, int y, int w, int h, int r, uint16_t color) {
+    lcd.fillRoundRect(x, y, w, h, r, color);
+}
+
 // Ve chu can giua theo chieu ngang (nen trong suot)
 void display_text_center(int cx, int yTop, const char *s, uint16_t color, int size) {
     lcd.setTextSize(size);

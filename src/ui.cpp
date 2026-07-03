@@ -21,7 +21,7 @@ LV_FONT_DECLARE(vn_font_20);
 //    NEXT/PREV = di chuyen, ENTER = chon, ESC = quay lai
 // ============================================================
 
-enum Screen { SCR_WATCH, SCR_MENU, SCR_NAV, SCR_UPLOAD, SCR_NOTIFY, SCR_MUSIC, SCR_REMOTE, SCR_CAMERA, SCR_QR, SCR_FIND, SCR_TIMER, SCR_CALL, SCR_DIAL, SCR_REPLY };
+enum Screen { SCR_WATCH, SCR_MENU, SCR_NAV, SCR_UPLOAD, SCR_NOTIFY, SCR_MUSIC, SCR_REMOTE, SCR_CAMERA, SCR_QR, SCR_FIND, SCR_TIMER, SCR_CALL, SCR_DIAL, SCR_REPLY, SCR_PET };
 
 static lv_group_t *g_group   = nullptr;
 static lv_obj_t   *g_scr     = nullptr;   // man hinh hien tai
@@ -50,8 +50,9 @@ static const char *MENU_ITEMS[] = { LV_SYMBOL_BELL    " Thong bao",
                                     LV_SYMBOL_CALL    " Tim dien thoai",
                                     LV_SYMBOL_LOOP    " Bam gio",
                                     LV_SYMBOL_CALL    " Goi dien",
+                                    LV_SYMBOL_EYE_OPEN " Vector",
                                     LV_SYMBOL_SETTINGS " Cai dat" };
-static const int   MENU_N = 10;
+static const int   MENU_N = 11;
 static int         menuSel = 0;
 static lv_obj_t   *menuBtns[MENU_N];
 
@@ -70,6 +71,11 @@ static void reply_refresh();
 static int  replySel = 0;
 static lv_obj_t *replyBtns[MAX_REPLIES];
 static lv_obj_t *lblReplyInfo = nullptr;
+// Vector pet state (dung o key_handler + ui_fast_tick)
+static uint32_t petNextBlink = 0, petBlinkStart = 0, petNextLook = 0;
+static bool     petBlinking = false;
+static int      petLookX = 0, petLookY = 0;
+static uint32_t petHappyUntil = 0, petExcitedUntil = 0, petLastFrame = 0;
 
 // ---------- tien ich ----------
 static lv_obj_t* make_root() {
@@ -285,7 +291,8 @@ static void menu_activate() {
         case 6: request_screen(SCR_FIND);   break;
         case 7: request_screen(SCR_TIMER);  break;
         case 8: request_screen(SCR_DIAL);   break;
-        case 9: /* TODO: cai dat */         break;
+        case 9: request_screen(SCR_PET);    break;
+        case 10: /* TODO: cai dat */        break;
     }
 }
 
@@ -769,6 +776,11 @@ static void key_handler(lv_event_t *e) {
             else if (key == LV_KEY_ESC)   request_screen(SCR_WATCH);   // C: bo qua
             break;
 
+        case SCR_PET:
+            if (key == LV_KEY_DOWN || key == LV_KEY_ENTER) petHappyUntil = millis() + 1600; // vuot ve -> vui
+            else if (key == LV_KEY_ESC) request_screen(SCR_MENU);
+            break;
+
         case SCR_DIAL:
             if (g_contacts.count > 0) {
                 if (key == LV_KEY_DOWN)      { dialSel = (dialSel + 1) % g_contacts.count; dial_refresh(); }
@@ -1027,12 +1039,82 @@ static void build_reply(lv_obj_t *scr) {
 }
 
 // ============================================================
+//  VECTOR - thu cung mat cyan (ve truc tiep)
+// ============================================================
+static void pet_draw(int mood) {   // 0=neutral 1=blink 2=happy 3=sleepy 4=excited
+    display_fill_rect(20, 40, 200, 164, 0x0000);   // xoa vung mat
+    uint16_t col = 0x07FF;                          // cyan Vector
+    int cxL = 92 + petLookX, cxR = 148 + petLookX;
+    int cy  = 122 + petLookY;
+
+    if (mood == 1) {                    // BLINK: vach mong
+        display_fill_round_rect(cxL - 24, cy - 5, 48, 10, 5, col);
+        display_fill_round_rect(cxR - 24, cy - 5, 48, 10, 5, col);
+    } else if (mood == 2) {             // HAPPY: vom cong len
+        display_fill_round_rect(cxL - 24, cy - 22, 48, 44, 22, col);
+        display_fill_round_rect(cxR - 24, cy - 22, 48, 44, 22, col);
+        display_fill_rect(cxL - 26, cy + 2, 52, 28, 0x0000);   // cat nua duoi -> hinh ^
+        display_fill_rect(cxR - 26, cy + 2, 52, 28, 0x0000);
+    } else if (mood == 3) {             // SLEEPY: mat lim + zzz
+        display_fill_round_rect(cxL - 24, cy + 8, 48, 12, 6, col);
+        display_fill_round_rect(cxR - 24, cy + 8, 48, 12, 6, col);
+        display_text(166, 60, "z", col, 0x0000);
+        display_text(184, 46, "z", col, 0x0000);
+    } else {                            // NEUTRAL(0) / EXCITED(4)
+        int w = (mood == 4) ? 54 : 48;
+        int h = (mood == 4) ? 78 : 66;
+        display_fill_round_rect(cxL - w / 2, cy - h / 2, w, h, 16, col);
+        display_fill_round_rect(cxR - w / 2, cy - h / 2, w, h, 16, col);
+    }
+}
+
+static void build_pet(lv_obj_t *scr) {
+    (void)scr;
+    display_set_raw(true);
+    display_fill(0x0000);
+    petLastFrame = 0; petNextBlink = 0; petNextLook = 0;
+    petBlinking = false; petLookX = petLookY = 0;
+    petHappyUntil = petExcitedUntil = 0;
+}
+
+// Goi moi vong loop() -> hoat hinh Vector (chi lam viec khi dang o man Pet)
+void ui_fast_tick() {
+    if (g_cur != SCR_PET) return;
+    uint32_t now = millis();
+    if (now - petLastFrame < 60) return;   // ~16fps
+    petLastFrame = now;
+
+    if (g_notify.hasNew) { g_notify.hasNew = false; petExcitedUntil = now + 2500; }  // tin nhan -> reo
+
+    if (!petBlinking && now >= petNextBlink) { petBlinking = true; petBlinkStart = now; }
+    if (petBlinking && now - petBlinkStart > 130) {
+        petBlinking = false;
+        petNextBlink = now + 1800 + (uint32_t)random(0, 3500);
+    }
+    if (now >= petNextLook) {
+        petLookX = (int)random(-14, 15);
+        petLookY = (int)random(-8, 9);
+        petNextLook = now + 1400 + (uint32_t)random(0, 3000);
+    }
+
+    struct tm tm;
+    bool night = wf_get_time(tm) && (tm.tm_hour >= 22 || tm.tm_hour < 6);
+    int mood;
+    if (now < petExcitedUntil)    mood = 4;
+    else if (now < petHappyUntil) mood = 2;
+    else if (night)               mood = 3;
+    else if (petBlinking)         mood = 1;
+    else                          mood = 0;
+    pet_draw(mood);
+}
+
+// ============================================================
 //  Chuyen man hinh
 // ============================================================
 static void show_screen(Screen s) {
     // doc don dep man hinh cu
     lv_obj_t *old = g_scr;
-    if (g_cur == SCR_WATCH || g_cur == SCR_QR) display_set_raw(false);  // het man ve-raw
+    if (g_cur == SCR_WATCH || g_cur == SCR_QR || g_cur == SCR_PET) display_set_raw(false);  // het man ve-raw
     if (g_cur == SCR_REMOTE || g_cur == SCR_CAMERA) { hid_stop(); ble_init(); } // tat HID, bat lai BLE thuong
 
     // reset con tro label
@@ -1071,6 +1153,7 @@ static void show_screen(Screen s) {
         case SCR_CALL:   build_call(g_scr);      break;
         case SCR_DIAL:   build_dial(g_scr);      break;
         case SCR_REPLY:  build_reply(g_scr);     break;
+        case SCR_PET:    build_pet(g_scr);       break;
     }
 
     lv_scr_load(g_scr);

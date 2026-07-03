@@ -82,6 +82,9 @@ void loop() {
         ui_tick();
     }
 
+    // 3b) Hoat hinh nhanh (Vector) khi dang o man Pet
+    ui_fast_tick();
+
     // 4) Web server (khi dang upload)
     web_task();
 
