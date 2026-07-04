@@ -8,6 +8,7 @@
 #include "bao_img.h"
 #include "eat_img.h"
 #include "heart_img.h"
+#include "chongmat_img.h"
 
 LV_FONT_DECLARE(vn_font_16);
 LV_FONT_DECLARE(vn_font_20);
@@ -201,36 +202,24 @@ static void pet_love(uint32_t now) {
     lv_canvas_draw_img(petCanvas, x, y, &heart_img, &idsc);
 }
 
-// Ve 1 mat xoay tron oc (@_@) - nhieu vong ban kinh tang dan, xoay theo time
-static void pet_swirl(int cx, int cy, int a, lv_color_t c) {
-    for (int k = 0; k < 4; k++) {
-        int r = 8 + k * 7;
-        int s = a + k * 250;
-        pet_arc(cx, cy, r, s, s + 230, 5, c);
-    }
-}
-
-// Chong mat - 2 mat xoay tron oc + sao nhieu mau bay vong quanh dau (dizzy)
+// Chong mat - anh that (chongmat.png): mat xoay oc + sao + ma ung. Cho LAC LU xoay nhe
+// (woozy) + nhun cho song dong tu 1 khung hinh.
 static void pet_dizzy(uint32_t now) {
     lv_canvas_fill_bg(petCanvas, lv_color_black(), LV_OPA_COVER);
-    lv_color_t swc = lv_color_hex(0x9B6BFF);   // xoay mau tim
-    int a  = (int)(now * 0.45f) % 360;
-    int cy = PET_CH / 2 + 8;
-    pet_swirl(PET_CW / 2 - EYE_SP / 2 - EYE_W / 2, cy, a, swc);
-    pet_swirl(PET_CW / 2 + EYE_SP / 2 + EYE_W / 2, cy, a, swc);
+    float sway = sinf(now * 0.005f);               // lac cham qua lai -1..1
+    int angle = (int)(sway * 70);                  // +-7 do (nho de anh TO ma khong bi cat mep khi xoay)
+    if (angle < 0) angle += 3600;                  // LVGL angle 0..3600
+    int bob = (int)(sinf(now * 0.008f) * 4);       // nhun nhe
 
-    // 3 ngoi sao nhieu mau bay vong tren dau
-    static const uint32_t starCol[3] = { 0xFFD23F, 0xFF4D6A, 0x4DE1FF };
-    float base = now * 0.006f;
-    int ocx = PET_CW / 2, ocy = 30;
-    for (int i = 0; i < 3; i++) {
-        float ang = base + i * 2.094f;          // 120 do cach nhau
-        int sx = ocx + (int)(cosf(ang) * 46);
-        int sy = ocy + (int)(sinf(ang) * 14);   // quy dao det (nhin nghieng)
-        lv_color_t sc = lv_color_hex(starCol[i]);
-        pet_circle(sx, sy, 6, sc);              // than sao
-        pet_arc(sx, sy, 9, 0, 360, 2, sc);      // hao quang
-    }
+    lv_draw_img_dsc_t idsc; lv_draw_img_dsc_init(&idsc);
+    idsc.angle    = angle;
+    idsc.pivot.x  = chongmat_img.header.w / 2;     // xoay quanh tam anh
+    idsc.pivot.y  = chongmat_img.header.h / 2;
+    idsc.antialias = 0;
+
+    int x = (PET_CW - chongmat_img.header.w) / 2;
+    int y = (PET_CH - chongmat_img.header.h) / 2 + bob;
+    lv_canvas_draw_img(petCanvas, x, y, &chongmat_img, &idsc);
 }
 
 // ---- Mat cho man doc bao: rounded rect; khi chop thi thanh 2 vom cong ----
