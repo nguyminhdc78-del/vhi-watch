@@ -9,6 +9,7 @@
 #include "eat_img.h"
 #include "heart_img.h"
 #include "chongmat_img.h"
+#include "sleep_img.h"
 
 LV_FONT_DECLARE(vn_font_16);
 LV_FONT_DECLARE(vn_font_20);
@@ -40,6 +41,8 @@ static int      petMenuSel = 0;
 static int      petPokeCnt = 0;
 static uint32_t petLastPoke = 0;
 static uint32_t petPokeLockUntil = 0;   // khoa nut A khi dang gian -> animation gian chay tron
+static bool     petSleeping = false;    // ngu khi 60s khong tuong tac
+static int      petSleepF = -1;
 // ============================================================
 //  BANG DANG KY TRO (registry)
 //  Them 1 tro = them 1 DONG o day (+ viet ham ve neu la tro ve rieng).
@@ -498,7 +501,21 @@ void build_pet(lv_obj_t *scr) {
     petAct = 0; petActUntil = 0; petRestUntil = 0; petBagN = petBagPos = 0;
     petMenuOpen = false; petLock = false; petMenuSel = 0;
     petPokeCnt = 0; petLastPoke = 0; petPokeLockUntil = 0;
+    petSleeping = false; petSleepF = -1;
     pet_render(0, EYE_H, EYE_H, 0, 0, lv_color_hex(0x33E1FF));
+}
+
+// NGU: khong tuong tac 60s -> ngu, luan phien 2 frame (bong bong mui tho phong/xep). Chi ve khi doi frame.
+static void pet_sleep(uint32_t now) {
+    int f = (int)((now / 800) % SLEEP_FRAMES);     // doi frame moi 800ms (tho cham)
+    if (f == petSleepF) return;                    // frame chua doi -> khoi ve (nhe)
+    petSleepF = f;
+    lv_canvas_fill_bg(petCanvas, lv_color_black(), LV_OPA_COVER);
+    const lv_img_dsc_t *img = sleep_imgs[f];
+    lv_draw_img_dsc_t idsc; lv_draw_img_dsc_init(&idsc);
+    int x = (PET_CW - img->header.w) / 2;          // = 0: anh full canvas 224x208, da can giua san
+    int y = (PET_CH - img->header.h) / 2;
+    lv_canvas_draw_img(petCanvas, x, y, img, &idsc);
 }
 
 // Do lai "tui" cac tro se dien: xao tron -> luot HET bo moi lap lai (co trat tu, khong nhay coc trung).
@@ -525,6 +542,14 @@ void pet_tick(uint32_t now) {
 
     // ---- Dang mo menu chon animation -> chi ve menu ----
     if (petMenuOpen) { pet_menu_draw(); return; }
+
+    // 60s khong bam nut / khong co thong bao -> NGU (g_lastInputMs reset khi bam nut/co tin/goi)
+    if (now - g_lastInputMs > 60000) {
+        if (!petSleeping) { petSleeping = true; petSleepF = -1; }
+        pet_sleep(now);
+        return;
+    }
+    if (petSleeping) petSleeping = false;           // vua co tuong tac -> thuc day
 
     if (g_notify.hasNew && !petLock) { g_notify.hasNew = false; petAct = 7; petActUntil = now + 2800; }  // tin nhan -> mat trai tim
 
